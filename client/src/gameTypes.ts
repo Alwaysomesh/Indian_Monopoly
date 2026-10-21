@@ -17,15 +17,17 @@ export interface Property {
   price: number;
   rent: number[];
   houseCost?: number;
-  ownerId?: string;
+  ownerId: string | null;
   houses: number;
   mortgaged: boolean;
 }
 
-export type BoardSpace =
-  | { id: string; type: "property"; propertyId: string }
-  | { id: string; type: "railroad" | "utility"; propertyId: string }
-  | { id: string; type: "chance" | "communityChest" | "tax" | "corner"; label: string };
+export interface BoardSpace {
+  id: string;
+  type: "property" | "railroad" | "utility" | "chance" | "communityChest" | "tax" | "corner";
+  propertyId?: string;
+  label?: string;
+}
 
 export interface Player {
   id: string;
@@ -37,6 +39,7 @@ export interface Player {
   inJail: boolean;
   jailTurns: number;
   bankrupt: boolean;
+  connected: boolean;
 }
 
 export interface TradeOffer {
@@ -50,6 +53,20 @@ export interface TradeOffer {
   status: "pending" | "accepted" | "rejected" | "cancelled";
 }
 
+export interface GameChatMessage {
+  id: string;
+  playerId: string;
+  playerName: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface GameLogEntry {
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface GameState {
   roomCode: string;
   board: BoardSpace[];
@@ -57,19 +74,51 @@ export interface GameState {
   players: Player[];
   currentPlayerIndex: number;
   turnNumber: number;
-  phase: "waiting" | "rolling" | "resolving" | "buying" | "trading" | "finished";
+  phase: "waiting" | "rolling" | "buying" | "auction" | "debt" | "end-turn" | "finished";
   dice: [number, number] | null;
-  deck: { chance: string[]; communityChest: string[] };
+  canRollAgain: boolean;
+  pendingPurchase: { propertyId: string } | null;
+  debt: { debtorId: string; creditorId: string | null; amount: number; reason: string; resumePhase?: GameState["phase"] } | null;
+  auction: {
+    propertyId: string;
+    highestBid: number;
+    highestBidderId: string | null;
+    turnPlayerId: string;
+    passedPlayerIds: string[];
+  } | null;
   trades: TradeOffer[];
-  log: Array<{ id: string; message: string; createdAt: number }>;
+  chat: GameChatMessage[];
+  log: GameLogEntry[];
 }
 
 export interface PublicRoom {
   code: string;
-  players: Array<{ id: string; name: string }>;
+  hostId: string;
+  players: Array<{ id: string; name: string; connected: boolean }>;
   maxPlayers: number;
 }
 
-export type RoomResponse =
-  | { ok: true; room: PublicRoom }
-  | { ok: false; error: string };
+export interface RoomResponse {
+  ok: boolean;
+  error?: string;
+  room?: PublicRoom;
+  game?: GameState;
+}
+
+export type GameAction =
+  | { action: "roll" | "jail-roll" | "jail-pay" | "buy" | "pass" | "end-turn" | "declare-bankrupt" }
+  | { action: "mortgage" | "unmortgage" | "build" | "sell-house"; propertyId: string }
+  | { action: "auction-bid"; amount: number }
+  | { action: "auction-pass" }
+  | {
+      action: "trade-offer";
+      trade: {
+        toPlayerId: string;
+        cashFrom: number;
+        cashTo: number;
+        propertiesFrom: string[];
+        propertiesTo: string[];
+      };
+    }
+  | { action: "trade-reply"; tradeId: string; accept: boolean }
+  | { action: "chat"; text: string };
