@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 
-export const BOARD = [
+export const MIN_PLAYERS = 2; export const MAX_PLAYERS = 10;  export const BOARD = [
   { id: "go", type: "corner", label: "GO" },
   { id: "dharavi", type: "property", propertyId: "dharavi" },
   { id: "chest-1", type: "communityChest", label: "Community Chest" },
@@ -118,7 +118,7 @@ const CHEST_CARDS = [
   { text: "Donate ₹100 to the neighbourhood festival.", action: "pay", amount: 100 },
 ];
 
-const TOKENS = ["🛺", "🐘", "🪁", "🚂", "🦚", "🥭"];
+const TOKENS = ["🛺", "🐘", "🪁", "🚂", "🦚", "🥭", "🐅", "🪔", "🥁", "🐪"];
 
 function makeProperties() {
   const properties = {};
@@ -144,8 +144,8 @@ function shuffled(cards) {
 }
 
 export function createGame(roomCode, lobbyPlayers) {
-  if (lobbyPlayers.length < 2 || lobbyPlayers.length > 6) {
-    throw new Error("A game needs 2 to 6 players.");
+  if (lobbyPlayers.length < 2 || lobbyPlayers.length > MAX_PLAYERS) {
+    throw new Error(`A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players.`);
   }
   return {
     roomCode,
