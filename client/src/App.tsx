@@ -197,7 +197,7 @@ export default function App() {
           </p>
           <div className="features">
             <span>₹ Rupee economy</span>
-            <span>✦ 2–6 players</span>
+            <span>✦ 2–10 players</span>
             <span>⌁ Live multiplayer</span>
           </div>
         </div>
@@ -249,7 +249,7 @@ export default function App() {
               <ul className="player-list">
                 {room.players.map((player, index) => (
                   <li key={player.id}>
-                    <span className={`player-dot dot-${index % 6}`} />
+                    <span className={`player-dot dot-${index % 10}`} />
                     {player.name}
                     {!player.connected && <small>OFFLINE</small>}
                     {player.id === room.hostId && <small>HOST</small>}
@@ -714,5 +714,5 @@ function GameTable({
 }
 
 function playerColor(index: number) {
-  return ["#c96f40", "#56886d", "#647bb2", "#d2a437", "#bc5b53", "#8064a6"][Math.max(index, 0) % 6];
+  return ["#c96f40", "#56886d", "#647bb2", "#d2a437", "#bc5b53", "#8064a6", "#248f8a", "#b34a75", "#8b6b35", "#5e718c"][Math.max(index, 0) % 10];
 }
