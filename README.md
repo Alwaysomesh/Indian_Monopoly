@@ -1,6 +1,12 @@
-# Monopoly India starter
+# Monopoly India
 
-This starter currently provides an online private-room lobby for up to six players. It does **not** yet implement the Monopoly board, game rules, chat, or trading.
+An Indian-themed, real-time Monopoly-style game for 2–6 players. The Node.js server is authoritative: browsers send actions over Socket.IO, and the server validates turns and broadcasts the resulting room/game state.
+
+## Play online
+
+Open [indian-monopoly.onrender.com](https://indian-monopoly.onrender.com), create a private room, share its code with friends, and start when at least two players have joined. Players can buy Indian city and landmark properties, pay rent and taxes, build houses and hotels, mortgage properties, go to jail, bid in property auctions, trade, and chat.
+
+The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
 ## Run locally
 
@@ -11,22 +17,14 @@ npm install
 npm run dev
 ```
 
-Vite serves the client on port 5173 and proxies Socket.IO to the Express server on port 3001.
+Vite serves the client on port 5173 and proxies Socket.IO to the Express server on port 3001. `npm run build` runs the game-engine tests before building the client.
 
-## Deploy one public service with Railway
+## Deployment
 
-The included `railway.json` builds the React client and runs the Express/Socket.IO server. The server serves the built client, so friends use one public URL for the webpage and real-time connections.
-
-1. Push this project to a GitHub repository.
-2. In Railway, create a project from that repository and deploy it using the included configuration.
-3. In the service's **Settings → Networking**, generate a public domain.
-4. Set the service variable `CLIENT_ORIGIN` to that exact origin, including `https://` and with no trailing slash (for example, `https://your-app.up.railway.app`). Redeploy if Railway does not do so automatically.
-5. Open the public URL, create a room, and send the room code and URL to your friends.
-
-Railway supplies the `PORT` environment variable. The `/health` endpoint is used for deployment health checks. No `VITE_SOCKET_URL` is needed for this single-service setup; the browser connects to Socket.IO on the same public origin.
+The service can host the built client and Socket.IO server together. Set `CLIENT_ORIGIN` to the public site origin if hosting the client separately; use comma-separated origins for multiple clients. `PORT` is provided by the hosting platform. The `/health` endpoint returns the health-check response.
 
 ### Hosting the client separately
 
 If you host the Vite client on a different service, set `VITE_SOCKET_URL` to the Socket.IO server's public URL when building the client, and set `CLIENT_ORIGIN` on the server to the client's exact public origin. For multiple allowed client origins, separate them with commas.
 
-Room and player data currently live in server memory. They are lost when the service restarts, and this in-memory setup is intended for a single server instance.
+Game rooms currently live in server memory. They are lost when the server restarts, and this setup is intended for a single server instance.
