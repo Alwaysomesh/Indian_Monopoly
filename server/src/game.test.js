@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BOARD, createGame, performGameAction } from "./game.js";
+import { BOARD, createGame, MAX_PLAYERS, performGameAction } from "./game.js";
 
 const lobby = [
   { id: "player-one", name: "Asha", connected: true },
@@ -183,4 +183,17 @@ test("an auction with no bids leaves the property unowned", () => {
 
   assert.equal(game.properties.dharavi.ownerId, null);
   assert.equal(game.phase, "end-turn");
+});
+
+
+test("game supports ten players with distinct tokens and rejects an eleventh", () => {
+    const players = Array.from({ length: MAX_PLAYERS }, (_, index) => ({
+          id: `player-${index + 1}`,
+          name: `Player ${index + 1}`,
+          connected: true,
+    }));
+    const game = createGame("TEST10", players);
+    assert.equal(game.players.length, 10);
+    assert.equal(new Set(game.players.map((player) => player.token)).size, 10);
+    assert.throws(() => createGame("TEST11", [...players, { id: "player-11", name: "Player 11" }]), /2 to 10 players/);
 });
