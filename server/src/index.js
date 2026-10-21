@@ -8,7 +8,7 @@ import { Server } from "socket.io";
 import { createGame, performGameAction, publicGame } from "./game.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const MAX_PLAYERS = 6;
+const MAX_PLAYERS = 10;
 const rooms = new Map();
 const app = express();
 const httpServer = createServer(app);
@@ -155,7 +155,7 @@ io.on("connection", (socket) => {
       return;
     }
     if (!room.players.has(id) && room.players.size >= MAX_PLAYERS) {
-      acknowledge(ack, { ok: false, error: "This room is full (maximum 6 players)." });
+      acknowledge(ack, { ok: false, error: "This room is full (maximum 10 players)." });
       return;
     }
     acknowledge(ack, joinRoom(socket, room, id, name));
