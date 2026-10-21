@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
+import { createGame, performGameAction, publicGame } from "./game.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
 const MAX_PLAYERS = 6;
@@ -16,22 +17,15 @@ const clientOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
   .map((origin) => origin.trim())
   .filter(Boolean);
 const io = new Server(httpServer, {
-  cors: {
-    origin: clientOrigins,
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: clientOrigins, methods: ["GET", "POST"] },
 });
 const clientDist = resolve(dirname(fileURLToPath(import.meta.url)), "../../client/dist");
 
-app.get("/health", (_request, response) => {
-  response.json({ status: "ok" });
-});
+app.get("/health", (_request, response) => response.json({ status: "ok" }));
 
 if (existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get("*", (_request, response) => {
-    response.sendFile(resolve(clientDist, "index.html"));
-  });
+  app.get("*", (_request, response) => response.sendFile(resolve(clientDist, "index.html")));
 }
 
 function createRoomCode() {
@@ -45,30 +39,47 @@ function createRoomCode() {
 function publicRoom(room) {
   return {
     code: room.code,
-    players: [...room.players.values()],
+    hostId: room.hostId,
+    players: [...room.players.values()].map(({ id, name, connected }) => ({ id, name, connected })),
     maxPlayers: MAX_PLAYERS,
   };
 }
 
 function broadcastRoom(room) {
   io.to(room.code).emit("room:update", publicRoom(room));
+  if (room.game) io.to(room.code).emit("game:update", publicGame(room.game));
 }
 
 function cleanPlayerName(value) {
-  if (typeof value !== "string") return "";
-  return value.trim().replace(/\s+/g, " ").slice(0, 20);
+  return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, 20) : "";
+}
+
+function cleanPlayerId(value) {
+  return typeof value === "string" && /^[a-zA-Z0-9-]{8,64}$/.test(value) ? value : "";
 }
 
 function leaveCurrentRoom(socket) {
   const code = socket.data.roomCode;
-  if (!code) return;
+  const playerId = socket.data.playerId;
+  if (!code || !playerId) return;
 
   const room = rooms.get(code);
   socket.leave(code);
   socket.data.roomCode = undefined;
+  socket.data.playerId = undefined;
   if (!room) return;
 
-  room.players.delete(socket.id);
+  const player = room.players.get(playerId);
+  if (room.game && player) {
+    player.connected = false;
+    const gamePlayer = room.game.players.find((entry) => entry.id === playerId);
+    if (gamePlayer) gamePlayer.connected = false;
+  } else {
+    room.players.delete(playerId);
+    if (room.hostId === playerId) {
+      room.hostId = room.players.keys().next().value ?? null;
+    }
+  }
   if (room.players.size === 0) {
     rooms.delete(code);
   } else {
@@ -76,11 +87,40 @@ function leaveCurrentRoom(socket) {
   }
 }
 
+function joinRoom(socket, room, playerId, name) {
+  leaveCurrentRoom(socket);
+  const existingPlayer = room.players.get(playerId);
+  if (existingPlayer) {
+    existingPlayer.name = name;
+    existingPlayer.connected = true;
+  } else {
+    room.players.set(playerId, { id: playerId, name, connected: true });
+  }
+  const gamePlayer = room.game?.players.find((player) => player.id === playerId);
+  if (gamePlayer) {
+    gamePlayer.name = name;
+    gamePlayer.connected = true;
+  }
+  socket.data.roomCode = room.code;
+  socket.data.playerId = playerId;
+  socket.join(room.code);
+  return {
+    ok: true,
+    room: publicRoom(room),
+    ...(room.game ? { game: publicGame(room.game) } : {}),
+  };
+}
+
+function acknowledge(ack, result) {
+  if (typeof ack === "function") ack(result);
+}
+
 io.on("connection", (socket) => {
-  socket.on("room:create", ({ playerName } = {}, acknowledge) => {
+  socket.on("room:create", ({ playerName, playerId } = {}, ack) => {
     const name = cleanPlayerName(playerName);
-    if (!name) {
-      acknowledge?.({ ok: false, error: "Enter a player name (up to 20 characters)." });
+    const id = cleanPlayerId(playerId);
+    if (!name || !id) {
+      acknowledge(ack, { ok: false, error: "Enter a player name and refresh before joining." });
       return;
     }
 
@@ -88,51 +128,81 @@ io.on("connection", (socket) => {
     const code = createRoomCode();
     const room = {
       code,
-      players: new Map([[socket.id, { id: socket.id, name }]]),
+      hostId: id,
+      players: new Map(),
+      game: null,
     };
     rooms.set(code, room);
-    socket.data.roomCode = code;
-    socket.join(code);
-    acknowledge?.({ ok: true, room: publicRoom(room) });
+    acknowledge(ack, joinRoom(socket, room, id, name));
     broadcastRoom(room);
   });
 
-  socket.on("room:join", ({ roomCode, playerName } = {}, acknowledge) => {
+  socket.on("room:join", ({ roomCode, playerName, playerId } = {}, ack) => {
     const name = cleanPlayerName(playerName);
+    const id = cleanPlayerId(playerId);
     const code = typeof roomCode === "string" ? roomCode.trim().toUpperCase() : "";
     const room = rooms.get(code);
-
-    if (!name) {
-      acknowledge?.({ ok: false, error: "Enter a player name (up to 20 characters)." });
+    if (!name || !id) {
+      acknowledge(ack, { ok: false, error: "Enter a player name and refresh before joining." });
       return;
     }
     if (!room) {
-      acknowledge?.({ ok: false, error: "Room not found. Check the code and try again." });
+      acknowledge(ack, { ok: false, error: "Room not found. Check the code and try again." });
       return;
     }
-    if (socket.data.roomCode === code) {
-      const player = room.players.get(socket.id);
-      if (player) player.name = name;
-      acknowledge?.({ ok: true, room: publicRoom(room) });
-      broadcastRoom(room);
+    if (!room.players.has(id) && room.game) {
+      acknowledge(ack, { ok: false, error: "This game has already started." });
       return;
     }
-    if (room.players.size >= MAX_PLAYERS) {
-      acknowledge?.({ ok: false, error: "This room is full (maximum 6 players)." });
+    if (!room.players.has(id) && room.players.size >= MAX_PLAYERS) {
+      acknowledge(ack, { ok: false, error: "This room is full (maximum 6 players)." });
       return;
     }
-
-    leaveCurrentRoom(socket);
-    room.players.set(socket.id, { id: socket.id, name });
-    socket.data.roomCode = code;
-    socket.join(code);
-    acknowledge?.({ ok: true, room: publicRoom(room) });
+    acknowledge(ack, joinRoom(socket, room, id, name));
     broadcastRoom(room);
+  });
+
+  socket.on("game:start", (_payload, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    if (!room || !playerId || room.hostId !== playerId) {
+      acknowledge(ack, { ok: false, error: "Only the room host can start the game." });
+      return;
+    }
+    if (room.game) {
+      acknowledge(ack, { ok: false, error: "The game has already started." });
+      return;
+    }
+    try {
+      room.game = createGame(room.code, publicRoom(room).players);
+      acknowledge(ack, { ok: true, room: publicRoom(room), game: publicGame(room.game) });
+      broadcastRoom(room);
+    } catch (error) {
+      acknowledge(ack, { ok: false, error: error.message });
+    }
+  });
+
+  socket.on("room:leave", () => leaveCurrentRoom(socket));
+
+  socket.on("game:action", (payload, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    if (!room?.game || !playerId) {
+      acknowledge(ack, { ok: false, error: "Join a game room before taking actions." });
+      return;
+    }
+    try {
+      performGameAction(room.game, playerId, payload);
+      acknowledge(ack, { ok: true });
+      broadcastRoom(room);
+    } catch (error) {
+      acknowledge(ack, { ok: false, error: error.message || "That action could not be completed." });
+    }
   });
 
   socket.on("disconnect", () => leaveCurrentRoom(socket));
 });
 
 httpServer.listen(PORT, () => {
-  console.log("Monopoly India server listening on http://localhost:" + PORT);
+  console.log(`Monopoly India server listening on port ${PORT}`);
 });

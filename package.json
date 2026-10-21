@@ -10,7 +10,8 @@
   ],
   "scripts": {
     "dev": "concurrently -k \"npm:dev --workspace server\" \"npm:dev --workspace client\"",
-    "build": "npm run build --workspace client",
+    "build": "npm test && npm run build --workspace client",
+    "test": "node --test server/src/game.test.js",
     "start": "npm run start --workspace server"
   },
   "devDependencies": {
