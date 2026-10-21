@@ -77,7 +77,7 @@ input::placeholder { color: #aaa99f; }
 .player-list li { display: flex; align-items: center; gap: 9px; color: #39483b; font-size: 13px; }
 .player-list small { margin-left: auto; color: #ba7841; font-size: 8px; font-weight: 700; letter-spacing: .1em; }
 .player-dot { width: 9px; height: 9px; border-radius: 50%; background: #c8793b; }
-.dot-1 { background: #4c8b6a; }.dot-2 { background: #6878a7; }.dot-3 { background: #d0a43e; }.dot-4 { background: #b8584e; }.dot-5 { background: #8061a1; }
+.dot-1 { background: #4c8b6a; }.dot-2 { background: #6878a7; }.dot-3 { background: #d0a43e; }.dot-4 { background: #b8584e; }.dot-5 { background: #8061a1; }.dot-6 { background: #248f8a; }.dot-7 { background: #b34a75; }.dot-8 { background: #8b6b35; }.dot-9 { background: #5e718c; }
 .lobby-hint { margin: 6px 0 0; color: #979487; font-size: 11px; }
 
 footer { display: flex; justify-content: space-between; padding: 18px 0 20px; border-top: 1px solid rgba(38, 49, 39, .12); color: #99978b; font-size: 9px; font-weight: 600; letter-spacing: .13em; }

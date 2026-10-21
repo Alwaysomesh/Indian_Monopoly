@@ -1,6 +1,6 @@
 # Monopoly India
 
-An Indian-themed, real-time Monopoly-style game for 2–6 players. The Node.js server is authoritative: browsers send actions over Socket.IO, and the server validates turns and broadcasts the resulting room/game state.
+An Indian-themed, real-time Monopoly-style game for 2–10 players. The Node.js server is authoritative: browsers send actions over Socket.IO, and the server validates turns and broadcasts the resulting room/game state.
 
 ## Play online
 
