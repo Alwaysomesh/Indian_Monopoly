@@ -350,9 +350,10 @@ function GameTable({
     for (const player of movedPlayers) {
       const previous = previousPositions.current[player.id];
       const clockwiseDistance = (player.position - previous + 40) % 40;
-      const direction = player.inJail || clockwiseDistance <= 20 ? 1 : -1;
+      const movingToGo = player.position === 0 && previous !== 0;
+      const direction = player.inJail || movingToGo || clockwiseDistance <= 20 ? 1 : -1;
       const steps = player.inJail ? [player.position] : Array.from(
-        { length: direction === 1 ? clockwiseDistance : 40 - clockwiseDistance },
+        { length: movingToGo ? 40 - previous : direction === 1 ? clockwiseDistance : 40 - clockwiseDistance },
         (_, index) => (previous + direction * (index + 1) + 40) % 40,
       );
       steps.forEach((position, index) => {
@@ -436,7 +437,7 @@ function GameTable({
               </strong>
             </div>
             <div className="dice-result" aria-label="Last dice roll">
-              {game.dice ? <><span key={`die-${game.dice[0]}-${game.dice[1]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.dice[0]}-${game.dice[1]}`}>{game.dice[1]}</span></> : "⚄ ⚄"}
+              {game.dice ? <><span key={`die-${game.log[0]?.id}-${game.dice[0]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.log[0]?.id}-${game.dice[1]}`}>{game.dice[1]}</span></> : "⚄ ⚄"}
             </div>
           </div>
 
@@ -631,7 +632,7 @@ function GameTable({
                         )}
                         {hasMonopoly && property.houseCost && !property.mortgaged && (
                           <>
-                            <button disabled={!allowManage || game.phase === "debt" || property.houses >= 5 || me.cash < property.houseCost} onClick={() => onAction({ action: "build", propertyId: id })}>+ House</button>
+                            <button disabled={!allowManage || game.phase === "debt" || property.houses >= 5 || me.cash < property.houseCost} onClick={() => onAction({ action: "build", propertyId: id })}>{property.houses === 4 ? "Build hotel" : "+ House"}</button>
                             <button disabled={!allowManage || property.houses === 0} onClick={() => onAction({ action: "sell-house", propertyId: id })}>− House</button>
                           </>
                         )}
