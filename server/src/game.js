@@ -793,3 +793,29 @@ export function performGameAction(game, playerId, payload) {
   }
   throw new Error("Unknown game action.");
 }
+
+export function advanceDisconnectedPlayer(game, playerId) {
+  const player = playerById(game, playerId);
+  if (!player || player.connected || player.bankrupt || game.phase === "finished") return false;
+
+  if (game.phase === "debt" && game.debt?.debtorId === playerId) {
+    performGameAction(game, playerId, { action: "declare-bankrupt" });
+    return true;
+  }
+  if (game.phase === "auction" && game.auction?.turnPlayerId === playerId) {
+    performGameAction(game, playerId, { action: "auction-pass" });
+    addLog(game, `${player.name} was passed in the auction after disconnecting.`);
+    return true;
+  }
+  if (game.phase === "buying" && currentPlayer(game).id === playerId) {
+    performGameAction(game, playerId, { action: "pass" });
+    addLog(game, `${player.name} passed on the property after disconnecting.`);
+    return true;
+  }
+  if ((game.phase === "rolling" || game.phase === "end-turn") && currentPlayer(game).id === playerId) {
+    addLog(game, `${player.name}'s turn was skipped after disconnecting.`);
+    nextPlayer(game);
+    return true;
+  }
+  return false;
+}
