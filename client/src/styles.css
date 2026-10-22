@@ -380,6 +380,12 @@ footer b { color: #c8793b; }
 .property-rent-list > strong { margin-bottom: 3px; color: #536452; font-size: 10px; }
 .property-rent-list p { display: flex; justify-content: space-between; gap: 10px; margin: 0; padding: 5px 2px; border-bottom: 1px solid #eee9de; }
 .property-rent-list p b { color: #344937; font-size: 10px; }
+.property-rent-list .current-rent { color: #405f45; font-weight: 700; }
+.property-rent-list .current-rent b { color: #2f503a; }
+.utility-rent-total { margin-top: 4px !important; padding: 7px !important; border: 1px solid #dfe8db !important; border-radius: 5px; background: #f3f7ef; }
+.property-detail-controls { grid-column: 1 / -1; gap: 7px; margin-top: 4px; }
+.property-detail-controls button { min-height: 34px; padding: 7px 9px; font-size: 9px; }
+.property-detail-actions { display: grid; grid-column: 1 / -1; gap: 7px; }
 .property-season-note { margin: 0; padding: 8px; border-radius: 5px; background: #fff4df; color: #8c6335; font-size: 10px; line-height: 1.4; }
 @media (max-width: 500px) { .turn-clock { min-width: 40px; padding: 4px 6px; } .turn-clock strong { font-size: 11px; } .turn-clock span { font-size: 7px; } .property-detail-card { padding: 17px; } .property-detail-band { margin: -17px -17px 3px; } }
 
