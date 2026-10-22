@@ -3,10 +3,17 @@ import { randomBytes } from "node:crypto";
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 10;
 export const RULE_PRESETS = {
-  classic: { startingCash: 1500, goSalary: 200, rentMultiplier: 1, auctionsEnabled: true },
-  quick: { startingCash: 1200, goSalary: 300, rentMultiplier: 2, auctionsEnabled: true },
-  chaos: { startingCash: 1000, goSalary: 400, rentMultiplier: 3, auctionsEnabled: true },
+  classic: { startingCash: 1500, goSalary: 200, rentMultiplier: 1, auctionsEnabled: true, seasonsEnabled: false },
+  quick: { startingCash: 1200, goSalary: 300, rentMultiplier: 2, auctionsEnabled: true, seasonsEnabled: false },
+  chaos: { startingCash: 1000, goSalary: 400, rentMultiplier: 3, auctionsEnabled: true, seasonsEnabled: false },
 };
+
+const SEASON_EVENTS = [
+  { id: "railway-rush", title: "Railway Rush", description: "Railway rent is doubled this turn." },
+  { id: "construction-boom", title: "Construction Boom", description: "House and hotel construction costs are doubled this turn." },
+  { id: "rent-relief", title: "Rent Relief", description: "Property rent is halved this turn." },
+  { id: "festival-bonus", title: "Festival Bonus", description: "Every active player collects a ₹200 festival bonus." },
+];
 
 export const BOARD = [
   { id: "go", type: "corner", label: "GO" },
@@ -161,6 +168,7 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     ...preset,
     startingCash: settings.startingCash ?? preset.startingCash,
     auctionsEnabled: settings.auctionsEnabled ?? preset.auctionsEnabled,
+    seasonsEnabled: settings.seasonsEnabled ?? preset.seasonsEnabled,
   };
   if (!Number.isSafeInteger(rules.startingCash) || rules.startingCash < 500 || rules.startingCash > 5000) {
     throw new Error("Starting cash must be between ₹500 and ₹5,000.");
@@ -168,7 +176,10 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
   if (typeof rules.auctionsEnabled !== "boolean") {
     throw new Error("Auction setting must be enabled or disabled.");
   }
-  return {
+  if (typeof rules.seasonsEnabled !== "boolean") {
+    throw new Error("Season setting must be enabled or disabled.");
+  }
+  const game = {
     roomCode,
     ruleSet,
     rules,
@@ -185,10 +196,13 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
       jailTurns: 0,
       bankrupt: false,
       connected: player.connected !== false,
+      botControlled: false,
     })),
     currentPlayerIndex: 0,
     turnNumber: 1,
     phase: "rolling",
+    seasonEvent: null,
+    deadlineAt: null,
     dice: null,
     doublesCount: 0,
     canRollAgain: false,
@@ -203,6 +217,8 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     chat: [],
     log: [{ id: randomBytes(6).toString("hex"), text: "The game is on! Good luck, everyone.", createdAt: Date.now() }],
   };
+  startSeason(game);
+  return game;
 }
 
 export function publicGame(game) {
@@ -219,6 +235,17 @@ export function publicGame(game) {
 function addLog(game, text) {
   game.log.unshift({ id: randomBytes(6).toString("hex"), text, createdAt: Date.now() });
   game.log = game.log.slice(0, 40);
+}
+
+function startSeason(game) {
+  game.seasonEvent = null;
+  if (!game.rules.seasonsEnabled) return;
+  const event = SEASON_EVENTS[Math.floor(Math.random() * SEASON_EVENTS.length)];
+  game.seasonEvent = event;
+  if (event.id === "festival-bonus") {
+    for (const player of activePlayers(game)) player.cash += 200;
+  }
+  addLog(game, `Season event: ${event.title}. ${event.description}`);
 }
 
 function activePlayers(game) {
@@ -250,6 +277,8 @@ function nextPlayer(game) {
   game.canRollAgain = false;
   game.doublesCount = 0;
   game.dice = null;
+  game.deadlineAt = null;
+  startSeason(game);
 }
 
 function sendToJail(game, player, reason) {
@@ -340,7 +369,9 @@ function resolveSpace(game, player, rentMultiplier = 1) {
         game,
         player,
         playerById(game, property.ownerId),
-        rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier * game.rules.rentMultiplier,
+        Math.ceil(rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier * game.rules.rentMultiplier *
+          (game.seasonEvent?.id === "railway-rush" && property.group === "railroad" ? 2 : 1) *
+          (game.seasonEvent?.id === "rent-relief" ? 0.5 : 1)),
         property.name + " rent",
       );
     }
@@ -704,8 +735,9 @@ export function performGameAction(game, playerId, payload) {
     const minimum = Math.min(...group.map((item) => item.houses));
     if (action === "build") {
       if (property.houses !== minimum || property.houses >= 5) throw new Error("Build evenly across your colour set, up to four houses and a hotel.");
-      if (player.cash < property.houseCost) throw new Error("Not enough cash to build here.");
-      player.cash -= property.houseCost;
+      const constructionCost = property.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1);
+      if (player.cash < constructionCost) throw new Error("Not enough cash to build here.");
+      player.cash -= constructionCost;
       property.houses += 1;
       addLog(game, `${player.name} builds ${property.houses === 5 ? "a hotel" : "a house"} on ${property.name}.`);
     } else {
@@ -758,10 +790,18 @@ export function performGameAction(game, playerId, payload) {
   if (game.phase === "debt" && !["mortgage", "sell-house"].includes(action)) {
     throw new Error("Raise cash by mortgaging property, selling buildings, or declaring bankruptcy.");
   }
-  if (action === "buy" || action === "pass") {
+  if (action === "buy" || action === "pass" || action === "auction") {
     if (game.phase !== "buying" || !game.pendingPurchase) throw new Error("There is no property to buy.");
     const property = game.properties[game.pendingPurchase.propertyId];
     game.pendingPurchase = null;
+    if (action === "auction") {
+      if (!game.rules.auctionsEnabled) {
+        game.pendingPurchase = { propertyId: property.id };
+        throw new Error("Auctions are disabled in this room.");
+      }
+      startAuction(game, property.id);
+      return;
+    }
     if (action === "buy") {
       if (property.ownerId || player.cash < property.price) {
         game.pendingPurchase = { propertyId: property.id };
@@ -778,8 +818,7 @@ export function performGameAction(game, playerId, payload) {
         if (game.phase !== "debt") game.phase = game.canRollAgain ? "rolling" : "end-turn";
         return;
       }
-      startAuction(game, property.id);
-      return;
+      addLog(game, `${property.name} remains unsold after ${player.name} declined it.`);
     }
     completeDebt(game, player);
     if (game.phase !== "debt") game.phase = "rolling";
@@ -794,28 +833,63 @@ export function performGameAction(game, playerId, payload) {
   throw new Error("Unknown game action.");
 }
 
-export function advanceDisconnectedPlayer(game, playerId) {
-  const player = playerById(game, playerId);
-  if (!player || player.connected || player.bankrupt || game.phase === "finished") return false;
-
-  if (game.phase === "debt" && game.debt?.debtorId === playerId) {
-    performGameAction(game, playerId, { action: "declare-bankrupt" });
+function advanceAutomatically(game, player) {
+  if (game.phase === "debt" && game.debt?.debtorId === player.id) {
+    const mortgageable = player.propertyIds.find((id) => {
+      const property = game.properties[id];
+      const group = Object.values(game.properties).filter((item) => item.group === property.group);
+      return !property.mortgaged && group.every((item) => item.houses === 0);
+    });
+    if (mortgageable) {
+      performGameAction(game, player.id, { action: "mortgage", propertyId: mortgageable });
+      return true;
+    }
+    const sellable = player.propertyIds.find((id) => {
+      const property = game.properties[id];
+      const group = Object.values(game.properties).filter((item) => item.group === property.group);
+      return property.houses > 0 && property.houses === Math.max(...group.map((item) => item.houses));
+    });
+    if (sellable) {
+      performGameAction(game, player.id, { action: "sell-house", propertyId: sellable });
+      return true;
+    }
+    performGameAction(game, player.id, { action: "declare-bankrupt" });
     return true;
   }
-  if (game.phase === "auction" && game.auction?.turnPlayerId === playerId) {
-    performGameAction(game, playerId, { action: "auction-pass" });
-    addLog(game, `${player.name} was passed in the auction after disconnecting.`);
+  if (game.phase === "auction" && game.auction?.turnPlayerId === player.id) {
+    performGameAction(game, player.id, { action: "auction-pass" });
     return true;
   }
-  if (game.phase === "buying" && currentPlayer(game).id === playerId) {
-    performGameAction(game, playerId, { action: "pass" });
-    addLog(game, `${player.name} passed on the property after disconnecting.`);
+  if (game.phase === "buying" && currentPlayer(game).id === player.id) {
+    const property = game.properties[game.pendingPurchase.propertyId];
+    const action = player.cash >= property.price + 200 ? "buy" : game.rules.auctionsEnabled ? "auction" : "pass";
+    performGameAction(game, player.id, { action });
     return true;
   }
-  if ((game.phase === "rolling" || game.phase === "end-turn") && currentPlayer(game).id === playerId) {
-    addLog(game, `${player.name}'s turn was skipped after disconnecting.`);
-    nextPlayer(game);
+  if (game.phase === "rolling" && currentPlayer(game).id === player.id) {
+    performGameAction(game, player.id, { action: player.inJail ? "jail-roll" : "roll" });
+    return true;
+  }
+  if (game.phase === "end-turn" && currentPlayer(game).id === player.id) {
+    performGameAction(game, player.id, { action: "end-turn" });
     return true;
   }
   return false;
+}
+
+export function advanceDisconnectedPlayer(game, playerId) {
+  const player = playerById(game, playerId);
+  if (!player || player.connected || player.bankrupt || game.phase === "finished") return false;
+  if (!player.botControlled) {
+    player.botControlled = true;
+    addLog(game, `${player.name} disconnected; the table bot is now playing until they return.`);
+  }
+  return advanceAutomatically(game, player);
+}
+
+export function advanceTimedOutPlayer(game, playerId) {
+  const player = playerById(game, playerId);
+  if (!player || player.bankrupt || game.phase === "finished") return false;
+  addLog(game, `${player.name} ran out of time; an automatic action was taken.`);
+  return advanceAutomatically(game, player);
 }
