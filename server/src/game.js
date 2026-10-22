@@ -1116,6 +1116,40 @@ function proposeAiTrade(game, bot) {
   return false;
 }
 
+function buildBestBotImprovement(game, player) {
+  if (!["rolling", "end-turn"].includes(game.phase)) return false;
+
+  const reserve = Math.min(300, Math.max(100, Math.ceil(player.cash * 0.2)));
+  const constructionMultiplier = game.seasonEvent?.id === "construction-boom" ? 2 : 1;
+  let bestBuild = null;
+
+  for (const property of Object.values(game.properties)) {
+    if (property.ownerId !== player.id || property.group === "railroad" || property.group === "utility") continue;
+    const group = Object.values(game.properties).filter((item) => item.group === property.group);
+    if (!hasMonopoly(game, player, property.group) || group.some((item) => item.mortgaged)) continue;
+
+    const minimumHouses = Math.min(...group.map((item) => item.houses));
+    if (property.houses !== minimumHouses || property.houses >= 5) continue;
+
+    const cost = property.houseCost * constructionMultiplier;
+    if (player.cash - cost < reserve) continue;
+
+    const currentRent = property.houses === 0 ? property.rent[0] * 2 : property.rent[property.houses];
+    const nextRent = property.rent[property.houses + 1];
+    const rentIncrease = (nextRent - currentRent) * game.rules.rentMultiplier;
+    if (rentIncrease <= 0) continue;
+
+    const returnOnInvestment = rentIncrease / cost;
+    if (!bestBuild || returnOnInvestment > bestBuild.returnOnInvestment) {
+      bestBuild = { property, returnOnInvestment };
+    }
+  }
+
+  if (!bestBuild) return false;
+  performGameAction(game, player.id, { action: "build", propertyId: bestBuild.property.id });
+  return true;
+}
+
 export function advanceAiPlayer(game, playerId) {
   const player = playerById(game, playerId);
   if (!player || !player.isAiBot || player.bankrupt || game.phase === "finished") return false;
@@ -1124,6 +1158,7 @@ export function advanceAiPlayer(game, playerId) {
     player.lastBotTradeTurn = game.turnNumber;
     if (proposeAiTrade(game, player)) return true;
   }
+  if (currentPlayer(game).id === player.id && buildBestBotImprovement(game, player)) return true;
   return advanceAutomatically(game, player);
 }
 
@@ -1134,6 +1169,7 @@ export function advanceDisconnectedPlayer(game, playerId) {
     player.botControlled = true;
     addLog(game, `${player.name} disconnected; the table bot is now playing until they return.`);
   }
+  if (currentPlayer(game).id === player.id && buildBestBotImprovement(game, player)) return true;
   return advanceAutomatically(game, player);
 }
 

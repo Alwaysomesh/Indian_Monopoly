@@ -16,13 +16,13 @@ The host can also customize starting cash from ₹500 to ₹5,000, turn property
 
 Hosts can set a 30, 60, 90, or 120 minute match; at time-up, active players rank by cash first and property count second. Landing exactly on GO pays twice the selected GO salary in total, while passing GO still pays the normal salary. A separate setting can send cities returned by bankrupt players to bank auction. Sarkari Neelami can auction one unsold city at half price starting in round 4: every other round with fewer than eight players, or every round with eight or more. It defaults off below six total seats and on at six or more; the host can override that default.
 
-The host can add up to nine learning bots to fill seats for solo practice. Bots manage purchases and auctions, offer fair property trades when useful, and evaluate incoming trades based on asset value and available cash. Human players can still join any open seats before the game starts.
+The host can add up to nine learning bots to fill seats for solo practice. Bots manage purchases and auctions, invest in houses and hotels on complete color sets when the rent increase justifies the cost, and keep a cash reserve. They also offer fair property trades when useful and evaluate incoming trades based on asset value and available cash. Human players can still join any open seats before the game starts.
 
 Click a city, railway, or utility on the board to view its rent schedule, ownership, mortgage values, and building costs. From the same panel, buy an available property, start an auction, pass, or manage your own mortgages and buildings. Power Grid and Water Works charge rent at 4× the dice roll when the owner has one utility, or 10× when they own both; game rules and season effects also apply. The board initially scrolls to your token; scroll the shared game page to explore the board and controls. Each owned space displays its owner's colored player token. Trade cash accepts any nonnegative whole-rupee amount. The active player has 30 seconds to roll and 45 seconds for other decisions; an automatic action keeps play moving if a timer expires.
 
 The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
-If a player disconnects during a game, their browser saves their player identity and room so it can automatically rejoin. After 30 seconds offline, a bot temporarily takes over and makes conservative moves (including managing debt); the player can rejoin the same room at any time and resume control.
+If a player disconnects during a game, their browser saves their player identity and room so it can automatically rejoin. After 30 seconds offline, a bot temporarily takes over and makes conservative moves (including managing debt and building on complete color sets when affordable); the player can rejoin the same room at any time and resume control.
 
 ## Run locally
 
