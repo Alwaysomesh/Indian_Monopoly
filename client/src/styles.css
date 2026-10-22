@@ -142,6 +142,10 @@ footer b { color: #c8793b; }
 .dice-result span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #e9e3d4; border-radius: 6px; background: white; }
 .dice-result b { color: #aaa495; font-size: 13px; }
 .game-error { margin: 0 0 12px; padding: 10px 13px; border: 1px solid #efc7b7; border-radius: 6px; background: #fff1eb; color: #a44936; font-size: 12px; }
+.board-tools { display: flex; width: min(100%, 1120px); align-items: center; justify-content: space-between; gap: 10px; margin: 0 auto 8px; color: #858274; font-size: 10px; }
+.board-tools strong { color: #415a47; }
+.board-tools button { min-height: 32px; padding: 6px 10px; border: 1px solid #d8ddcf; border-radius: 5px; background: #fffdf7; color: #405a45; font-size: 9px; font-weight: 700; }
+.board-tools button:hover { border-color: #98aa91; background: #f3f7ef; }
 .board-wrap { position: relative; width: min(100%, 1120px); aspect-ratio: 1; flex: 0 0 auto; min-height: 0; margin: 0 auto; padding: 10px; border: 1px solid rgba(44, 64, 47, .2); border-radius: 7px; background: #e4eddf; box-shadow: 0 10px 32px rgba(48, 62, 43, .09); }
 .board-grid { display: grid; width: 100%; height: 100%; grid-template-columns: repeat(11, minmax(0, 1fr)); grid-template-rows: repeat(11, minmax(0, 1fr)); overflow: hidden; position: relative; border: 1px solid #9da994; background: #e4eddf; }
 .board-center { grid-column: 2 / 11; grid-row: 2 / 11; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; text-align: center; }
@@ -235,6 +239,7 @@ footer b { color: #c8793b; }
 .empty-note { margin: 0; padding: 15px 4px; color: #959285; font-size: 10px; line-height: 1.5; }
 .trade-panel { max-height: min(60dvh, 640px); min-height: 0; flex: 0 1 auto; overflow-x: hidden; overflow-y: auto; padding: 12px; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .trade-panel form { display: grid; gap: 7px; }
+.trade-panel > .action-button { width: 100%; }
 .trade-panel label { margin: 3px 0 0; color: #6d6b5f; font-size: 9px; }
 .trade-panel input:not([type="checkbox"]), .trade-panel select { width: 100%; height: 32px; padding: 0 8px; border: 1px solid #e5e1d6; border-radius: 4px; background: white; font-size: 10px; }
 .trade-property-options { display: grid; max-height: 88px; overflow: auto; gap: 5px; padding: 5px 7px; border: 1px solid #eeebe2; border-radius: 4px; }
@@ -274,6 +279,20 @@ footer b { color: #c8793b; }
 .drawn-card p { margin: 17px 0 0; color: #2f4936; font-family: "Playfair Display", Georgia, serif; font-size: 21px; line-height: 1.35; }
 .card-sparkle { margin-bottom: 9px; color: #c8783c; font-size: 28px; }
 .card-dismiss { position: absolute; top: 4px; right: 8px; border: 0; background: transparent; color: #8b806e; font-size: 23px; }
+.trade-backdrop { z-index: 25; }
+.trade-dialog { position: relative; display: grid; width: min(620px, 100%); max-height: min(90vh, 780px); overflow: auto; gap: 11px; padding: 24px; border: 1px solid #ded4bf; border-radius: 12px; background: #fffdf7; box-shadow: 0 22px 80px rgba(24, 34, 24, .3); animation: card-deal .28s cubic-bezier(.2,.8,.3,1.2) both; }
+.trade-dialog > small { color: #9a7248; font-size: 8px; font-weight: 700; letter-spacing: .15em; }
+.trade-dialog h2 { margin: 0; color: #294733; font-family: "Playfair Display", Georgia, serif; font-size: 25px; }
+.trade-dialog form { display: grid; gap: 9px; }
+.trade-dialog label { margin: 0; color: #6d6b5f; font-size: 10px; }
+.trade-dialog select, .trade-search, .trade-cash-fields input { width: 100%; height: 38px; margin-top: 5px; padding: 0 10px; border: 1px solid #e5e1d6; border-radius: 5px; background: #fff; color: #38473b; font-size: 11px; }
+.trade-cash-fields, .trade-property-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.trade-search { height: 32px; margin: 5px 0; }
+.trade-dialog .trade-property-options { max-height: 148px; padding: 8px; }
+.trade-dialog .trade-property-options .check-option { display: flex; min-height: 27px; align-items: center; overflow-wrap: anywhere; }
+.trade-dialog .check-option input { width: 15px; height: 15px; flex: 0 0 auto; margin: 0; }
+.trade-dialog .action-button { width: 100%; }
+.trade-dialog .error-message { margin: 0; }
 
 @keyframes dice-roll { 0% { transform: rotate(-150deg) scale(.4); opacity: .3; } 70% { transform: rotate(15deg) scale(1.12); } 100% { transform: rotate(0) scale(1); opacity: 1; } }
 @keyframes token-hop { 0% { transform: translateY(-12px) scale(.7); opacity: .25; } 65% { transform: translateY(2px) scale(1.12); } 100% { transform: translateY(0) scale(1); opacity: 1; } }
@@ -293,6 +312,7 @@ footer b { color: #c8793b; }
   .table-layout { display: grid; height: auto; min-height: 0; grid-template-columns: 1fr; max-width: 680px; overflow: visible; margin: 11px auto 0; }
   .board-column { display: block; min-height: 0; }
   .board-wrap { width: min(100%, 630px, calc(100vw - 24px)); flex: none; }
+  .board-tools { width: min(100%, 630px, calc(100vw - 24px)); }
   .game-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; align-items: start; padding-right: 0; }
   .detail-panel { grid-row: span 2; }
   .log-panel { grid-column: 1; }
@@ -339,6 +359,9 @@ footer b { color: #c8793b; }
   .action-panel { padding: 12px; }
   .action-button, .detail-tabs button, .offer-actions button, .property-controls button { min-height: 38px; }
   .chat-panel { height: min(54vh, 360px); min-height: 240px; }
+  .trade-dialog { gap: 9px; padding: 18px; }
+  .trade-cash-fields, .trade-property-columns { grid-template-columns: 1fr; gap: 8px; }
+  .trade-dialog .trade-property-options { max-height: 110px; }
 }
 
 @media (orientation: landscape) and (max-height: 600px) and (min-width: 761px) {
