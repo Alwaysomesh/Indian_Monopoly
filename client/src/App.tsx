@@ -480,6 +480,17 @@ function GameTable({
   const latestLogId = game.log[0]?.id;
   const selectedProperty = selectedPropertyId ? game.properties[selectedPropertyId] ?? null : null;
   const selectedOwner = selectedProperty?.ownerId ? game.players.find((player) => player.id === selectedProperty.ownerId) : null;
+  const selectedPropertyGroup = selectedProperty ? Object.values(game.properties).filter((property) => property.group === selectedProperty.group) : [];
+  const selectedUtilityCount = selectedOwner ? Object.values(game.properties).filter((property) => property.group === "utility" && property.ownerId === selectedOwner.id).length : 0;
+  const selectedCanManage = (game.phase === "debt" && game.debt?.debtorId === playerId) || (isMyTurn && ["rolling", "buying", "end-turn"].includes(game.phase));
+  const selectedGroupHasBuildings = selectedPropertyGroup.some((property) => property.houses > 0);
+  const selectedGroupHasMortgage = selectedPropertyGroup.some((property) => property.mortgaged);
+  const selectedHasMonopoly = selectedProperty && selectedProperty.group !== "railroad" && selectedProperty.group !== "utility" && selectedPropertyGroup.every((property) => property.ownerId === playerId);
+  const selectedMinimumBuildings = Math.min(...selectedPropertyGroup.map((property) => property.houses));
+  const selectedMaximumBuildings = Math.max(...selectedPropertyGroup.map((property) => property.houses));
+  const selectedHouseCost = selectedProperty?.houseCost ? selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1) : 0;
+  const selectedRentRelief = game.seasonEvent?.id === "rent-relief" ? 0.5 : 1;
+  const selectedPendingPurchase = selectedProperty && game.phase === "buying" && isMyTurn && game.pendingPurchase?.propertyId === selectedProperty.id;
   const secondsRemaining = game.deadlineAt ? Math.max(0, Math.ceil((game.deadlineAt - now) / 1000)) : null;
 
   useEffect(() => {
@@ -721,16 +732,31 @@ function GameTable({
                 <span className={`property-detail-band color-${selectedProperty.group}`} />
                 <small>PROPERTY DETAILS · {selectedProperty.group.replace(/([A-Z])/g, " $1").toUpperCase()}</small>
                 <h2>{selectedProperty.name}</h2>
-                {selectedOwner && <p className="property-owner-name"><i style={{ background: playerColor(game.players.indexOf(selectedOwner)) }} />Owned by {selectedOwner.name}</p>}
+                {selectedOwner ? <p className="property-owner-name"><i style={{ background: playerColor(game.players.indexOf(selectedOwner)) }} />Owned by {selectedOwner.name}</p> : <p className="property-owner-name">Unowned · available for purchase when a player lands here</p>}
                 <div className="property-detail-grid">
                   <p><span>Purchase price</span><strong>{formatMoney(selectedProperty.price)}</strong></p>
                   <p><span>Mortgage value</span><strong>{formatMoney(Math.floor(selectedProperty.price / 2))}</strong></p>
                   <p><span>Unmortgage cost</span><strong>{formatMoney(Math.ceil(selectedProperty.price * 0.55))}</strong></p>
                   <p><span>House / hotel cost</span><strong>{selectedProperty.houseCost ? formatMoney(selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1)) : "Not available"}</strong></p>
-                  <p><span>Current status</span><strong>{selectedProperty.mortgaged ? "Mortgaged" : "Available"}</strong></p>
+                  <p><span>Current status</span><strong>{selectedProperty.mortgaged ? "Mortgaged" : selectedOwner ? "Owned" : "Available"}</strong></p>
                   <p><span>Buildings</span><strong>{selectedProperty.houses === 5 ? "Hotel" : selectedProperty.houses > 0 ? `${selectedProperty.houses} houses` : "None"}</strong></p>
                 </div>
-                <div className="property-rent-list"><strong>Rent by buildings</strong>{selectedProperty.rent.map((rent, index) => <p key={index}><span>{index === 0 ? "No buildings" : index === 5 ? "Hotel" : `${index} house${index > 1 ? "s" : ""}`}</span><b>{formatMoney(Math.ceil(rent * game.rules.rentMultiplier * (game.seasonEvent?.id === "railway-rush" && selectedProperty.group === "railroad" ? 2 : 1) * (game.seasonEvent?.id === "rent-relief" ? 0.5 : 1)))}</b></p>)}</div>
+                <div className="property-rent-list"><strong>{selectedProperty.group === "utility" ? "Utility rent" : "Rent by buildings"}</strong>{selectedProperty.group === "utility" ? <>
+                  {[4, 10].map((multiplier) => <p className={selectedUtilityCount === (multiplier === 4 ? 1 : 2) ? "current-rent" : ""} key={multiplier}><span>{multiplier === 4 ? "One utility" : "Both utilities"}</span><b>Dice ×{multiplier}</b></p>)}
+                  {selectedOwner && game.dice && <p className="utility-rent-total"><span>Last-roll rent{selectedProperty.mortgaged ? " (mortgaged)" : ""}</span><b>{selectedProperty.mortgaged ? "No rent" : formatMoney(Math.ceil((game.dice[0] + game.dice[1]) * (selectedUtilityCount === 2 ? 10 : 4) * game.rules.rentMultiplier * selectedRentRelief))}</b></p>}
+                </> : selectedProperty.rent.map((rent, index) => <p key={index}><span>{index === 0 ? "No buildings" : index === 5 ? "Hotel" : index + " houses"}</span><b>{formatMoney(Math.ceil(rent * game.rules.rentMultiplier * (game.seasonEvent?.id === "railway-rush" && selectedProperty.group === "railroad" ? 2 : 1) * selectedRentRelief))}</b></p>)}</div>
+                {selectedOwner?.id === playerId && <div className="property-controls property-detail-controls">
+                  {selectedProperty.mortgaged ? <button disabled={!selectedCanManage || game.phase === "debt" || (me?.cash ?? 0) < Math.ceil(selectedProperty.price * 0.55)} onClick={() => onAction({ action: "unmortgage", propertyId: selectedProperty.id })}>Unmortgage · {formatMoney(Math.ceil(selectedProperty.price * 0.55))}</button> : <button disabled={!selectedCanManage || selectedGroupHasBuildings} onClick={() => onAction({ action: "mortgage", propertyId: selectedProperty.id })}>Mortgage · {formatMoney(Math.floor(selectedProperty.price / 2))}</button>}
+                  {selectedHasMonopoly && selectedProperty.houseCost && !selectedProperty.mortgaged && !selectedGroupHasMortgage && <>
+                    <button disabled={!selectedCanManage || game.phase === "debt" || selectedProperty.houses !== selectedMinimumBuildings || selectedProperty.houses >= 5 || (me?.cash ?? 0) < selectedHouseCost} onClick={() => onAction({ action: "build", propertyId: selectedProperty.id })}>{selectedProperty.houses === 4 ? "Build hotel" : "+ House"} · {formatMoney(selectedHouseCost)}</button>
+                    <button disabled={!selectedCanManage || selectedProperty.houses !== selectedMaximumBuildings || selectedProperty.houses === 0} onClick={() => onAction({ action: "sell-house", propertyId: selectedProperty.id })}>− Sell building · {formatMoney(Math.floor(selectedProperty.houseCost / 2))}</button>
+                  </>}
+                </div>}
+                {selectedPendingPurchase && <div className="property-detail-actions">
+                  <button className="action-button" disabled={(me?.cash ?? 0) < selectedProperty.price} onClick={() => onAction({ action: "buy" })}>Buy for {formatMoney(selectedProperty.price)}</button>
+                  {game.rules.auctionsEnabled && <button className="action-button secondary-action" onClick={() => onAction({ action: "auction" })}>Start auction</button>}
+                  <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Pass</button>
+                </div>}
                 {game.seasonEvent && <p className="property-season-note">{game.seasonEvent.description}</p>}
               </section>
             </div>
