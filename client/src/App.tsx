@@ -659,7 +659,7 @@ function GameTable({
             {secondsRemaining !== null && <div className={`turn-clock ${secondsRemaining <= 10 ? "turn-clock-urgent" : ""}`} role="timer"><strong>{secondsRemaining}s</strong><span>{game.phase === "rolling" ? "to roll" : "to act"}</span></div>}
           </div>
 
-          {game.seasonEvent && <div className="season-event" role="status"><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
+          {game.seasonEvent && <div className="season-event" role="status"><small>ROUND {game.roundNumber} · SPECIAL SEASON</small><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
           {error && <p className="game-error" role="alert">{error}</p>}
           <div className="board-wrap">
             <div className="board-grid">
