@@ -48,7 +48,7 @@ function getSessionPlayerId() {
 }
 
 function formatMoney(value: number) {
-  return `â‚¹${value.toLocaleString("en-IN")}`;
+  return `₹${value.toLocaleString("en-IN")}`;
 }
 
 function spacePosition(index: number): { gridColumn: number; gridRow: number } {
@@ -192,7 +192,7 @@ export default function App() {
     if (!room) return false;
     const amount = Number(value);
     if (!Number.isSafeInteger(amount) || amount < 500 || amount > 5000) {
-      setError("Starting cash must be a whole amount between â‚¹500 and â‚¹5,000.");
+      setError("Starting cash must be a whole amount between ₹500 and ₹5,000.");
       return false;
     }
     updateRoomRules(room.ruleSet, amount, room.rules.auctionsEnabled);
@@ -240,7 +240,7 @@ export default function App() {
           <span>MONOPOLY <strong>INDIA</strong></span>
         </a>
         <span className={`connection ${connected ? "online" : ""}`}>
-          <i /> {connected ? "Server connected" : "Connectingâ€¦"}
+          <i /> {connected ? "Server connected" : "Connecting…"}
         </span>
       </header>
       <section className="hero">
@@ -252,9 +252,9 @@ export default function App() {
             Your friends are just a room code away.
           </p>
           <div className="features">
-            <span>â‚¹ Rupee economy</span>
-            <span>âœ¦ 2â€“10 players</span>
-            <span>âŒ Live multiplayer</span>
+            <span>₹ Rupee economy</span>
+            <span>✦ 2–10 players</span>
+            <span>⌁ Live multiplayer</span>
           </div>
         </div>
         <div className="join-card">
@@ -263,7 +263,7 @@ export default function App() {
               <p className="eyebrow">THE TABLE IS WAITING</p>
               <h2>{room ? "Your private table" : "Join the game"}</h2>
             </div>
-            <span className="dice-icon" aria-hidden="true">âš„</span>
+            <span className="dice-icon" aria-hidden="true">⚄</span>
           </div>
           {!room ? (
             <>
@@ -279,7 +279,7 @@ export default function App() {
                 value={playerName}
               />
               <button className="primary-button" onClick={() => enterRoom("create")}>
-                Create a private room <span>â†’</span>
+                Create a private room <span>→</span>
               </button>
               <div className="divider"><span>OR JOIN FRIENDS</span></div>
               <div className="join-row">
@@ -337,18 +337,18 @@ export default function App() {
                     }}
                     value={room.ruleSet}
                   >
-                    <option value="classic">Classic â€” standard rules</option>
-                    <option value="quick">Quick â€” â‚¹1,200 start, â‚¹300 GO, 2Ã— rent</option>
-                    <option value="chaos">Chaos â€” â‚¹1,000 start, â‚¹400 GO, 3Ã— rent</option>
+                    <option value="classic">Classic — standard rules</option>
+                    <option value="quick">Quick — ₹1,200 start, ₹300 GO, 2× rent</option>
+                    <option value="chaos">Chaos — ₹1,000 start, ₹400 GO, 3× rent</option>
                   </select>
                   <p className="rule-description">
                     {room.ruleSet === "classic"
-                      ? "Traditional rent and â‚¹200 for passing GO."
+                      ? "Traditional rent and ₹200 for passing GO."
                       : room.ruleSet === "quick"
-                        ? "Faster play: â‚¹300 for passing GO and double rent."
-                        : "High-stakes chaos: â‚¹400 for passing GO and triple rent."}
+                        ? "Faster play: ₹300 for passing GO and double rent."
+                        : "High-stakes chaos: ₹400 for passing GO and triple rent."}
                   </p>
-                  <label className="rules-label" htmlFor="starting-cash">Starting cash (â‚¹500â€“â‚¹5,000)</label>
+                  <label className="rules-label" htmlFor="starting-cash">Starting cash (₹500–₹5,000)</label>
                   <input
                     defaultValue={room.rules.startingCash}
                     id="starting-cash"
@@ -380,15 +380,15 @@ export default function App() {
                     Enable property auctions when declined
                   </label>
                   <button className="primary-button" disabled={room.players.length < 2} onClick={startGame}>
-                    {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>â†’</span>
+                    {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>→</span>
                   </button>
                 </>
               ) : (
                 <p className="lobby-hint">
                   Game style: <strong>{room.ruleSet === "classic" ? "Classic" : room.ruleSet === "quick" ? "Quick" : "Chaos"}</strong>
-                  {" "}Â· {formatMoney(room.rules.startingCash)} starting cash
-                  {" "}Â· auctions {room.rules.auctionsEnabled ? "on" : "off"}.
-                  {" "}Waiting for the host to start the gameâ€¦
+                  {" "}· {formatMoney(room.rules.startingCash)} starting cash
+                  {" "}· auctions {room.rules.auctionsEnabled ? "on" : "off"}.
+                  {" "}Waiting for the host to start the game…
                 </p>
               )}
               {error && <p className="error-message" role="alert">{error}</p>}
@@ -398,7 +398,7 @@ export default function App() {
       </section>
       <footer>
         <span>GOOD TIMES. GREAT REAL ESTATE.</span>
-        <span>MADE FOR YOUR CREW <b>âœ¦</b></span>
+        <span>MADE FOR YOUR CREW <b>✦</b></span>
       </footer>
     </main>
   );
@@ -520,7 +520,7 @@ function GameTable({
   async function copyGameRecap() {
     const winner = game.players.find((player) => !player.bankrupt);
     const recap = [
-      `Monopoly India Â· Room ${game.roomCode}`,
+      `Monopoly India · Room ${game.roomCode}`,
       `Winner: ${winner?.name ?? "Nobody"}`,
       `Cash leader: ${getLeaders(game.players, (player) => player.cash)}`,
       `Property collector: ${getLeaders(game.players, (player) => player.propertyIds.length)} (${Math.max(...game.players.filter((player) => !player.bankrupt).map((player) => player.propertyIds.length), 0)} properties)`,
@@ -569,10 +569,10 @@ function GameTable({
           <span className="room-chip">ROOM {game.roomCode}</span>
           <span className="room-chip rules-chip">
             {game.ruleSet === "classic" ? "CLASSIC" : game.ruleSet === "quick" ? "QUICK" : "CHAOS"}
-            {" Â· "}{formatMoney(game.rules.startingCash)} START
-            {" Â· "}{game.rules.auctionsEnabled ? "AUCTIONS ON" : "NO AUCTIONS"}
+            {" · "}{formatMoney(game.rules.startingCash)} START
+            {" · "}{game.rules.auctionsEnabled ? "AUCTIONS ON" : "NO AUCTIONS"}
           </span>
-          <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnectingâ€¦"}</span>
+          <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
         </div>
         <button className="quiet-button" onClick={onLeave}>Leave table</button>
       </header>
@@ -583,14 +583,14 @@ function GameTable({
             <div>
               <span className="turn-kicker">{game.phase === "finished" ? "GAME OVER" : `TURN ${game.turnNumber}`}</span>
               <strong>
-                {game.phase === "finished" ? "ðŸ†" : currentPlayer?.token}{" "}
+                {game.phase === "finished" ? "🏆" : currentPlayer?.token}{" "}
                 {game.phase === "finished"
                   ? `${game.players.find((player) => !player.bankrupt)?.name ?? "Nobody"} wins!`
                   : isMyTurn ? "Your turn" : `${currentPlayer?.name}'s turn`}
               </strong>
             </div>
             <div className="dice-result" aria-label="Last dice roll">
-              {game.dice ? <><span key={`die-${game.log[0]?.id}-${game.dice[0]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.log[0]?.id}-${game.dice[1]}`}>{game.dice[1]}</span></> : "âš„ âš„"}
+              {game.dice ? <><span key={`die-${game.log[0]?.id}-${game.dice[0]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.log[0]?.id}-${game.dice[1]}`}>{game.dice[1]}</span></> : "⚄ ⚄"}
             </div>
           </div>
 
@@ -598,10 +598,10 @@ function GameTable({
           <div className="board-wrap">
             <div className="board-grid">
               <div className="board-center">
-                <p className="board-ornament">âœ¦ &nbsp; à¤¨à¤®à¤¸à¥à¤¤à¥‡ &nbsp; âœ¦</p>
+                <p className="board-ornament">✦ &nbsp; नमस्ते &nbsp; ✦</p>
                 <p className="board-logo">MONOPOLY<br /><em>INDIA</em></p>
                 <p className="board-subtitle">A little luck. A lot of chai.</p>
-                <div className="center-dice">{game.dice ? `${game.dice[0]} + ${game.dice[1]}` : "âš„  âš„"}</div>
+                <div className="center-dice">{game.dice ? `${game.dice[0]} + ${game.dice[1]}` : "⚄  ⚄"}</div>
                 <p className="center-caption">{game.canRollAgain && isMyTurn ? "DOUBLES! ROLL AGAIN" : "THE CITY IS YOURS"}</p>
               </div>
               {game.board.map((space, index) => {
@@ -615,13 +615,13 @@ function GameTable({
                     className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""}`}
                     key={space.id}
                     style={{ gridColumn: position.gridColumn, gridRow: position.gridRow }}
-                    title={property ? `${property.name} Â· ${formatMoney(property.price)} Â· Rent ${formatMoney(property.rent[0])}` : space.label}
+                    title={property ? `${property.name} · ${formatMoney(property.price)} · Rent ${formatMoney(property.rent[0])}` : space.label}
                   >
                     {property && <span className={`space-color color-${property.group}`} />}
                     <span className="space-label">{property?.name ?? space.label}</span>
                     {property && <span className="space-price">{formatMoney(property.price)}</span>}
                     {property?.ownerId && <span className="owner-mark" style={{ background: playerColor(game.players.findIndex((player) => player.id === property.ownerId)) }} />}
-                    {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "ðŸ¨" : "ðŸ ".repeat(Math.min(property.houses, 4))}</span>}
+                    {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "🏨" : "🏠".repeat(Math.min(property.houses, 4))}</span>}
                     {occupants.length > 0 && (
                       <span className="space-tokens">
                         {occupants.map((player) => <i key={`${player.id}-${visualPositions[player.id] ?? player.position}`} title={player.name}>{player.token}</i>)}
@@ -634,9 +634,9 @@ function GameTable({
             {drawnCard && (
               <div className="card-backdrop" onClick={() => setDrawnCard("")}>
                 <section className="drawn-card" role="dialog" aria-modal="true" aria-label="Card drawn">
-                  <button className="card-dismiss" aria-label="Dismiss card" onClick={() => setDrawnCard("")}>Ã—</button>
-                  <span className="card-sparkle">âœ¦</span>
-                  <small>MONOPOLY INDIA Â· CARD DRAWN</small>
+                  <button className="card-dismiss" aria-label="Dismiss card" onClick={() => setDrawnCard("")}>×</button>
+                  <span className="card-sparkle">✦</span>
+                  <small>MONOPOLY INDIA · CARD DRAWN</small>
                   <p>{drawnCard}</p>
                 </section>
               </div>
@@ -648,7 +648,7 @@ function GameTable({
                 <span className="token-badge" style={{ background: playerColor(index) }}>{player.token}</span>
                 <span className="player-card-info">
                   <strong>{player.name}{player.id === playerId ? " (you)" : ""}</strong>
-                  <small>{player.bankrupt ? "Bankrupt" : player.inJail ? "In Jail" : player.connected ? "In the game" : "Reconnectingâ€¦"}</small>
+                  <small>{player.bankrupt ? "Bankrupt" : player.inJail ? "In Jail" : player.connected ? "In the game" : "Reconnecting…"}</small>
                 </span>
                 <b key={`cash-${player.id}-${player.cash}`} className="cash-counter">{formatMoney(player.cash)}</b>
               </div>
@@ -678,9 +678,9 @@ function GameTable({
                 <>
                   <div className="action-message">
                     <strong>{propertyName(game, game.auction.propertyId)} auction</strong>
-                    <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : "No bids yet â€” start at â‚¹1."}</span>
+                    <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : "No bids yet — start at ₹1."}</span>
                   </div>
-                  <label className="auction-label" htmlFor="auction-bid">Your bid (â‚¹)</label>
+                  <label className="auction-label" htmlFor="auction-bid">Your bid (₹)</label>
                   <input
                     id="auction-bid"
                     min={game.auction.highestBid + 1}
@@ -709,7 +709,7 @@ function GameTable({
               <>
                 <div className="action-message">
                   <strong>{pendingProperty.name}</strong>
-                  <span>Available for {formatMoney(pendingProperty.price)} Â· Rent starts at {formatMoney(pendingProperty.rent[0])}</span>
+                  <span>Available for {formatMoney(pendingProperty.price)} · Rent starts at {formatMoney(pendingProperty.rent[0])}</span>
                 </div>
                 <button className="action-button" disabled={(me?.cash ?? 0) < pendingProperty.price} onClick={() => onAction({ action: "buy" })}>
                   Buy for {formatMoney(pendingProperty.price)}
@@ -718,22 +718,22 @@ function GameTable({
               </>
             ) : rollAvailable && me?.inJail ? (
               <>
-                <div className="action-message"><strong>You're in Jail</strong><span>Roll doubles to get out, or pay â‚¹50.</span></div>
-                <button className="action-button" onClick={() => onAction({ action: "jail-roll" })}>ðŸŽ² Roll for doubles</button>
-                <button className="action-button secondary-action" disabled={me.cash < 50} onClick={() => onAction({ action: "jail-pay" })}>Pay â‚¹50 & roll</button>
+                <div className="action-message"><strong>You're in Jail</strong><span>Roll doubles to get out, or pay ₹50.</span></div>
+                <button className="action-button" onClick={() => onAction({ action: "jail-roll" })}>🎲 Roll for doubles</button>
+                <button className="action-button secondary-action" disabled={me.cash < 50} onClick={() => onAction({ action: "jail-pay" })}>Pay ₹50 & roll</button>
               </>
             ) : rollAvailable ? (
               <>
                 <div className="action-message">
                   <strong>{game.canRollAgain ? "Doubles! Roll again." : "Ready to roll?"}</strong>
-                  <span>{game.canRollAgain ? "Lucky you â€” take another turn." : "Roll the dice and see where Mumbai takes you."}</span>
+                  <span>{game.canRollAgain ? "Lucky you — take another turn." : "Roll the dice and see where Mumbai takes you."}</span>
                 </div>
-                <button className="action-button roll-button" onClick={() => onAction({ action: "roll" })}>ðŸŽ² Roll the dice</button>
+                <button className="action-button roll-button" onClick={() => onAction({ action: "roll" })}>🎲 Roll the dice</button>
               </>
             ) : mayEndTurn ? (
               <>
                 <div className="action-message"><strong>Move complete</strong><span>{game.canRollAgain ? "Roll doubles to keep your turn." : "Pass the dice to the next player."}</span></div>
-                <button className="action-button" onClick={() => onAction({ action: "end-turn" })}>End turn â†’</button>
+                <button className="action-button" onClick={() => onAction({ action: "end-turn" })}>End turn →</button>
               </>
             ) : (
               <div className="action-message">Finish resolving your move.</div>
@@ -758,13 +758,13 @@ function GameTable({
             <section className="recap-panel" aria-labelledby="recap-heading">
               <div className="panel-heading"><h3 id="recap-heading">Match highlights</h3><span>FINAL STATS</span></div>
               <div className="recap-winner">
-                <span aria-hidden="true">ðŸ†</span>
+                <span aria-hidden="true">🏆</span>
                 <div><small>CHAMPION</small><strong>{game.players.find((player) => !player.bankrupt)?.name ?? "No winner"}</strong></div>
               </div>
               <div className="recap-awards">
-                <p><span>ðŸ’° Cash leader</span><strong>{getLeaders(game.players, (player) => player.cash)}</strong></p>
-                <p><span>ðŸ™ï¸ Property collector</span><strong>{getLeaders(game.players, (player) => player.propertyIds.length)}</strong></p>
-                <p><span>ðŸ—ï¸ Skyline builder</span><strong>{getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}</strong></p>
+                <p><span>💰 Cash leader</span><strong>{getLeaders(game.players, (player) => player.cash)}</strong></p>
+                <p><span>🏙️ Property collector</span><strong>{getLeaders(game.players, (player) => player.propertyIds.length)}</strong></p>
+                <p><span>🏗️ Skyline builder</span><strong>{getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}</strong></p>
               </div>
               <button className="action-button recap-copy" onClick={() => void copyGameRecap()}>Copy match recap</button>
               {recapStatus && <p className="recap-status" role="status">{recapStatus}</p>}
@@ -803,7 +803,7 @@ function GameTable({
                         {hasMonopoly && property.houseCost && !property.mortgaged && (
                           <>
                             <button disabled={!allowManage || game.phase === "debt" || property.houses >= 5 || me.cash < property.houseCost} onClick={() => onAction({ action: "build", propertyId: id })}>{property.houses === 4 ? "Build hotel" : "+ House"}</button>
-                            <button disabled={!allowManage || property.houses === 0} onClick={() => onAction({ action: "sell-house", propertyId: id })}>âˆ’ House</button>
+                            <button disabled={!allowManage || property.houses === 0} onClick={() => onAction({ action: "sell-house", propertyId: id })}>− House</button>
                           </>
                         )}
                       </div>
@@ -820,8 +820,8 @@ function GameTable({
                     <option value="">Choose a player</option>
                     {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
                   </select>
-                  <label>Cash you offer (â‚¹)</label><input min="0" step="50" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} />
-                  <label>Cash you request (â‚¹)</label><input min="0" step="50" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} />
+                  <label>Cash you offer (₹)</label><input min="0" step="50" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} />
+                  <label>Cash you request (₹)</label><input min="0" step="50" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} />
                   <label>Your properties to offer</label>
                   <div className="trade-property-options">
                     {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged).map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
@@ -843,7 +843,7 @@ function GameTable({
                     const outgoing = trade.fromPlayerId === playerId && trade.status === "pending";
                     return (
                       <div className="trade-offer" key={trade.id}>
-                        <span>{from?.name} â†’ {to?.name}<small>{formatMoney(trade.cashFrom)} + {trade.propertiesFrom.length} propert{trade.propertiesFrom.length === 1 ? "y" : "ies"} â†” {formatMoney(trade.cashTo)} + {trade.propertiesTo.length} propert{trade.propertiesTo.length === 1 ? "y" : "ies"}</small></span>
+                        <span>{from?.name} → {to?.name}<small>{formatMoney(trade.cashFrom)} + {trade.propertiesFrom.length} propert{trade.propertiesFrom.length === 1 ? "y" : "ies"} ↔ {formatMoney(trade.cashTo)} + {trade.propertiesTo.length} propert{trade.propertiesTo.length === 1 ? "y" : "ies"}</small></span>
                         {incoming ? <span className="offer-actions"><button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: true })}>Accept</button><button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: false })}>Reject</button></span> : <small>{outgoing ? "Pending" : trade.status}</small>}
                       </div>
                     );
@@ -856,7 +856,7 @@ function GameTable({
               <div className="chat-panel">
                 <div className="chat-messages">
                   {game.chat.map((message) => (
-                    <div className={`chat-message ${message.playerId === playerId ? "my-message" : ""} ${["ðŸŽ‰", "ðŸ˜‚", "ðŸ‘€", "ðŸ", "â˜•"].includes(message.text) ? "chat-reaction" : ""}`} key={message.id}>
+                    <div className={`chat-message ${message.playerId === playerId ? "my-message" : ""} ${["🎉", "😂", "👀", "🏏", "☕"].includes(message.text) ? "chat-reaction" : ""}`} key={message.id}>
                       <strong>{message.playerName}</strong><p>{message.text}</p>
                     </div>
                   ))}
@@ -865,18 +865,18 @@ function GameTable({
                 </div>
                 <div className="quick-reactions" aria-label="Quick reactions">
                   {[
-                    ["ðŸŽ‰", "Celebrate"],
-                    ["ðŸ˜‚", "Laugh"],
-                    ["ðŸ‘€", "Surprised"],
-                    ["ðŸ", "Cricket"],
-                    ["â˜•", "Chai break"],
+                    ["🎉", "Celebrate"],
+                    ["😂", "Laugh"],
+                    ["👀", "Surprised"],
+                    ["🏏", "Cricket"],
+                    ["☕", "Chai break"],
                   ].map(([emoji, label]) => (
                     <button key={emoji} aria-label={label} title={label} onClick={() => onAction({ action: "chat", text: emoji })}>{emoji}</button>
                   ))}
                 </div>
                 <form className="chat-form" onSubmit={submitChat}>
-                  <input maxLength={240} placeholder="Say somethingâ€¦" value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} />
-                  <button aria-label="Send chat message" disabled={!chatDraft.trim()} type="submit">âž¤</button>
+                  <input maxLength={240} placeholder="Say something…" value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} />
+                  <button aria-label="Send chat message" disabled={!chatDraft.trim()} type="submit">➤</button>
                 </form>
               </div>
             )}
