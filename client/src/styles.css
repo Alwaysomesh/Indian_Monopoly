@@ -353,3 +353,32 @@ footer b { color: #c8793b; }
   .brand-mark, .join-card { transition: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
+
+
+.turn-banner { gap: 12px; }
+.turn-clock { display: grid; justify-items: center; min-width: 48px; gap: 2px; padding: 5px 9px; border: 1px solid #e8e1d2; border-radius: 7px; background: #f7f3e9; color: #536452; }
+.turn-clock strong { font-family: "DM Sans", sans-serif; font-size: 13px; }
+.turn-clock span { color: #898678; font-size: 8px; white-space: nowrap; }
+.turn-clock-urgent { border-color: #e6a08b; background: #fff0e9; color: #a44936; animation: money-flash .6s ease-in-out infinite alternate; }
+.season-event { display: flex; width: 100%; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; margin: 0 0 10px; padding: 9px 12px; border: 1px solid #e8d8b5; border-radius: 7px; background: #fff8e8; color: #6d5634; font-size: 10px; }
+.season-event strong { color: #a5652c; letter-spacing: .04em; }
+.season-event span { color: #82765f; }
+.board-space.property-space { cursor: pointer; transition: filter .15s ease, box-shadow .15s ease; }
+.board-space.property-space:hover, .board-space.property-space:focus-visible { z-index: 2; outline: 2px solid #bc7137; outline-offset: -2px; filter: brightness(1.04); box-shadow: 0 2px 8px rgba(38, 49, 39, .24); }
+.owner-mark { z-index: 1; width: 10px; height: 10px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(33, 45, 35, .55), 0 1px 3px rgba(0, 0, 0, .35); }
+.property-detail-card { position: relative; display: grid; width: min(440px, 100%); max-height: min(88vh, 760px); overflow: auto; gap: 10px; padding: 22px; border: 1px solid #ded4bf; border-radius: 12px; background: #fffdf7; box-shadow: 0 22px 80px rgba(24, 34, 24, .3); animation: card-deal .28s cubic-bezier(.2,.8,.3,1.2) both; }
+.property-detail-band { display: block; height: 15px; margin: -22px -22px 3px; border-bottom: 1px solid rgba(0,0,0,.12); }
+.property-detail-card > small { color: #9a7248; font-size: 8px; font-weight: 700; letter-spacing: .15em; }
+.property-detail-card h2 { margin: 0; color: #294733; font-family: "Playfair Display", Georgia, serif; font-size: 25px; }
+.property-owner-name { display: flex; align-items: center; gap: 8px; margin: 0; color: #64705f; font-size: 11px; }
+.property-owner-name i { width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px rgba(33,45,35,.45); }
+.property-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.property-detail-grid p { display: grid; gap: 4px; margin: 0; padding: 9px; border: 1px solid #ece5d7; border-radius: 6px; background: #fbf8f0; }
+.property-detail-grid span, .property-rent-list p span { color: #898678; font-size: 9px; }
+.property-detail-grid strong { color: #344937; font-size: 12px; }
+.property-rent-list { display: grid; gap: 2px; }
+.property-rent-list > strong { margin-bottom: 3px; color: #536452; font-size: 10px; }
+.property-rent-list p { display: flex; justify-content: space-between; gap: 10px; margin: 0; padding: 5px 2px; border-bottom: 1px solid #eee9de; }
+.property-rent-list p b { color: #344937; font-size: 10px; }
+.property-season-note { margin: 0; padding: 8px; border-radius: 5px; background: #fff4df; color: #8c6335; font-size: 10px; line-height: 1.4; }
+@media (max-width: 500px) { .turn-clock { min-width: 40px; padding: 4px 6px; } .turn-clock strong { font-size: 11px; } .turn-clock span { font-size: 7px; } .property-detail-card { padding: 17px; } .property-detail-band { margin: -17px -17px 3px; } }

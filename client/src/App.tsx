@@ -19,7 +19,7 @@ interface ClientToServerEvents {
   ) => void;
   "game:start": (payload: Record<string, never>, acknowledge: (response: RoomResponse) => void) => void;
   "room:settings": (
-    payload: { ruleSet: PublicRoom["ruleSet"]; startingCash: number; auctionsEnabled: boolean },
+    payload: { ruleSet: PublicRoom["ruleSet"]; startingCash: number; auctionsEnabled: boolean; seasonsEnabled: boolean },
     acknowledge: (response: { ok: boolean; error?: string }) => void,
   ) => void;
   "room:kick": (
@@ -193,9 +193,10 @@ export default function App() {
     ruleSet: PublicRoom["ruleSet"],
     startingCash: number,
     auctionsEnabled: boolean,
+    seasonsEnabled: boolean,
   ) {
     setError("");
-    socket.emit("room:settings", { ruleSet, startingCash, auctionsEnabled }, (response) => {
+    socket.emit("room:settings", { ruleSet, startingCash, auctionsEnabled, seasonsEnabled }, (response) => {
       if (!response.ok) setError(response.error ?? "Could not update the game rules.");
     });
   }
@@ -207,7 +208,7 @@ export default function App() {
       setError("Starting cash must be a whole amount between ₹500 and ₹5,000.");
       return false;
     }
-    updateRoomRules(room.ruleSet, amount, room.rules.auctionsEnabled);
+    updateRoomRules(room.ruleSet, amount, room.rules.auctionsEnabled, room.rules.seasonsEnabled);
     return true;
   }
 
@@ -345,7 +346,7 @@ export default function App() {
                       const value = event.target.value;
                       if (value === "classic" || value === "quick" || value === "chaos") {
                         const presetCash = value === "classic" ? 1500 : value === "quick" ? 1200 : 1000;
-                        updateRoomRules(value, presetCash, room.rules.auctionsEnabled);
+                        updateRoomRules(value, presetCash, room.rules.auctionsEnabled, room.rules.seasonsEnabled);
                       }
                     }}
                     value={room.ruleSet}
@@ -387,10 +388,25 @@ export default function App() {
                         room.ruleSet,
                         room.rules.startingCash,
                         event.currentTarget.checked,
+                        room.rules.seasonsEnabled,
                       )}
                       type="checkbox"
                     />
                     Enable property auctions when declined
+                  </label>
+                  <label className="auction-setting" htmlFor="seasons-enabled">
+                    <input
+                      checked={room.rules.seasonsEnabled}
+                      id="seasons-enabled"
+                      onChange={(event) => updateRoomRules(
+                        room.ruleSet,
+                        room.rules.startingCash,
+                        room.rules.auctionsEnabled,
+                        event.currentTarget.checked,
+                      )}
+                      type="checkbox"
+                    />
+                    Enable random season events
                   </label>
                   <button className="primary-button" disabled={room.players.length < 2} onClick={startGame}>
                     {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>→</span>
@@ -400,7 +416,8 @@ export default function App() {
                 <p className="lobby-hint">
                   Game style: <strong>{room.ruleSet === "classic" ? "Classic" : room.ruleSet === "quick" ? "Quick" : "Chaos"}</strong>
                   {" "}· {formatMoney(room.rules.startingCash)} starting cash
-                  {" "}· auctions {room.rules.auctionsEnabled ? "on" : "off"}.
+                  {" "}· auctions {room.rules.auctionsEnabled ? "on" : "off"}
+                  {" "}· seasons {room.rules.seasonsEnabled ? "on" : "off"}.
                   {" "}Waiting for the host to start the game…
                 </p>
               )}
@@ -452,11 +469,21 @@ function GameTable({
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [drawnCard, setDrawnCard] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
+  const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
+  const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
   const [visualPositions, setVisualPositions] = useState<Record<string, number>>({});
   const latestLogId = game.log[0]?.id;
+  const selectedProperty = selectedPropertyId ? game.properties[selectedPropertyId] ?? null : null;
+  const selectedOwner = selectedProperty?.ownerId ? game.players.find((player) => player.id === selectedProperty.ownerId) : null;
+  const secondsRemaining = game.deadlineAt ? Math.max(0, Math.ceil((game.deadlineAt - now) / 1000)) : null;
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 250);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (tab !== "chat") return;
@@ -590,6 +617,7 @@ function GameTable({
             {game.ruleSet === "classic" ? "CLASSIC" : game.ruleSet === "quick" ? "QUICK" : "CHAOS"}
             {" · "}{formatMoney(game.rules.startingCash)} START
             {" · "}{game.rules.auctionsEnabled ? "AUCTIONS ON" : "NO AUCTIONS"}
+            {" · "}{game.rules.seasonsEnabled ? "SEASONS ON" : "SEASONS OFF"}
           </span>
           <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
         </div>
@@ -617,8 +645,10 @@ function GameTable({
             <div className="dice-result" aria-label="Last dice roll">
               {game.dice ? <><span key={`die-${game.log[0]?.id}-${game.dice[0]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.log[0]?.id}-${game.dice[1]}`}>{game.dice[1]}</span></> : "⚄ ⚄"}
             </div>
+            {secondsRemaining !== null && <div className={`turn-clock ${secondsRemaining <= 10 ? "turn-clock-urgent" : ""}`} role="timer"><strong>{secondsRemaining}s</strong><span>{game.phase === "rolling" ? "to roll" : "to act"}</span></div>}
           </div>
 
+          {game.seasonEvent && <div className="season-event" role="status"><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
           {error && <p className="game-error" role="alert">{error}</p>}
           <div className="board-wrap">
             <div className="board-grid">
@@ -637,15 +667,19 @@ function GameTable({
                 const position = spacePosition(index);
                 return (
                   <div
-                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""}`}
+                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""}`}
                     key={space.id}
+                    onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
+                    onKeyDown={property ? (event) => { if (event.key === "Enter" || event.key === " ") setSelectedPropertyId(property.id); } : undefined}
+                    role={property ? "button" : undefined}
+                    tabIndex={property ? 0 : undefined}
                     style={{ gridColumn: position.gridColumn, gridRow: position.gridRow }}
                     title={property ? `${property.name} · ${formatMoney(property.price)} · Rent ${formatMoney(property.rent[0])}` : space.label}
                   >
                     {property && <span className={`space-color color-${property.group}`} />}
                     <span className="space-label">{property?.name ?? space.label}</span>
                     {property && <span className="space-price">{formatMoney(property.price)}</span>}
-                    {property?.ownerId && <span className="owner-mark" style={{ background: playerColor(game.players.findIndex((player) => player.id === property.ownerId)) }} />}
+                    {property?.ownerId && <span aria-label={`Owned by ${game.players.find((player) => player.id === property.ownerId)?.name ?? "another player"}`} className="owner-mark" title={`Owned by ${game.players.find((player) => player.id === property.ownerId)?.name ?? "another player"}`} style={{ background: playerColor(game.players.findIndex((player) => player.id === property.ownerId)) }} />}
                     {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "🏨" : "🏠".repeat(Math.min(property.houses, 4))}</span>}
                     {occupants.length > 0 && (
                       <span className="space-tokens">
@@ -667,13 +701,34 @@ function GameTable({
               </div>
             )}
           </div>
+          {selectedProperty && (
+            <div className="card-backdrop property-detail-backdrop" onClick={() => setSelectedPropertyId(null)}>
+              <section className="property-detail-card" role="dialog" aria-modal="true" aria-label={`${selectedProperty.name} property details`} onClick={(event) => event.stopPropagation()}>
+                <button className="card-dismiss" aria-label="Close property details" onClick={() => setSelectedPropertyId(null)}>×</button>
+                <span className={`property-detail-band color-${selectedProperty.group}`} />
+                <small>PROPERTY DETAILS · {selectedProperty.group.replace(/([A-Z])/g, " $1").toUpperCase()}</small>
+                <h2>{selectedProperty.name}</h2>
+                {selectedOwner && <p className="property-owner-name"><i style={{ background: playerColor(game.players.indexOf(selectedOwner)) }} />Owned by {selectedOwner.name}</p>}
+                <div className="property-detail-grid">
+                  <p><span>Purchase price</span><strong>{formatMoney(selectedProperty.price)}</strong></p>
+                  <p><span>Mortgage value</span><strong>{formatMoney(Math.floor(selectedProperty.price / 2))}</strong></p>
+                  <p><span>Unmortgage cost</span><strong>{formatMoney(Math.ceil(selectedProperty.price * 0.55))}</strong></p>
+                  <p><span>House / hotel cost</span><strong>{selectedProperty.houseCost ? formatMoney(selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1)) : "Not available"}</strong></p>
+                  <p><span>Current status</span><strong>{selectedProperty.mortgaged ? "Mortgaged" : "Available"}</strong></p>
+                  <p><span>Buildings</span><strong>{selectedProperty.houses === 5 ? "Hotel" : selectedProperty.houses > 0 ? `${selectedProperty.houses} houses` : "None"}</strong></p>
+                </div>
+                <div className="property-rent-list"><strong>Rent by buildings</strong>{selectedProperty.rent.map((rent, index) => <p key={index}><span>{index === 0 ? "No buildings" : index === 5 ? "Hotel" : `${index} house${index > 1 ? "s" : ""}`}</span><b>{formatMoney(Math.ceil(rent * game.rules.rentMultiplier * (game.seasonEvent?.id === "railway-rush" && selectedProperty.group === "railroad" ? 2 : 1) * (game.seasonEvent?.id === "rent-relief" ? 0.5 : 1)))}</b></p>)}</div>
+                {game.seasonEvent && <p className="property-season-note">{game.seasonEvent.description}</p>}
+              </section>
+            </div>
+          )}
           <div className="player-strip">
             {game.players.map((player, index) => (
               <div className={`player-card ${player.id === currentPlayer?.id ? "is-current" : ""} ${player.bankrupt ? "is-bankrupt" : ""}`} key={player.id}>
                 <span className="token-badge" style={{ background: playerColor(index) }}>{player.token}</span>
                 <span className="player-card-info">
                   <strong>{player.name}{player.id === playerId ? " (you)" : ""}</strong>
-                  <small>{player.bankrupt ? "Bankrupt" : player.inJail ? "In Jail" : player.connected ? "In the game" : "Reconnecting…"}</small>
+                  <small>{player.bankrupt ? "Bankrupt" : player.inJail ? "In Jail" : player.connected ? "In the game" : player.botControlled ? "Bot playing · reconnect anytime" : "Reconnecting…"}</small>
                 </span>
                 <b key={`cash-${player.id}-${player.cash}`} className="cash-counter">{formatMoney(player.cash)}</b>
               </div>
@@ -739,7 +794,8 @@ function GameTable({
                 <button className="action-button" disabled={(me?.cash ?? 0) < pendingProperty.price} onClick={() => onAction({ action: "buy" })}>
                   Buy for {formatMoney(pendingProperty.price)}
                 </button>
-                <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Pass</button>
+                {game.rules.auctionsEnabled && <button className="action-button secondary-action" onClick={() => onAction({ action: "auction" })}>Start auction</button>}
+                <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Decline</button>
               </>
             ) : rollAvailable && me?.inJail ? (
               <>
@@ -845,8 +901,8 @@ function GameTable({
                     <option value="">Choose a player</option>
                     {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
                   </select>
-                  <label>Cash you offer (₹)</label><input min="0" step="50" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} />
-                  <label>Cash you request (₹)</label><input min="0" step="50" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} />
+                  <label>Cash you offer (₹)</label><input min="0" step="1" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} />
+                  <label>Cash you request (₹)</label><input min="0" step="1" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} />
                   <label>Your properties to offer</label>
                   <div className="trade-property-options">
                     {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged).map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
