@@ -29,6 +29,97 @@ test("board has 40 spaces and every purchasable space has a property", () => {
   }
 });
 
+test("game supports ten players with a distinct Indian-themed token for each", () => {
+  const players = Array.from({ length: MAX_PLAYERS }, (_, index) => ({
+    id: `player-${index + 1}`,
+    name: `Player ${index + 1}`,
+    connected: true,
+  }));
+  const game = createGame("TEST10", players);
+
+  assert.equal(game.players.length, 10);
+  assert.equal(new Set(game.players.map((player) => player.token)).size, 10);
+  assert.throws(
+    () => createGame("TEST11", [...players, { id: "player-11", name: "Player 11" }]),
+    /2 to 10 players/,
+  );
+});
+
+test("quick and chaos presets apply their starting cash and rent multipliers", () => {
+  for (const [ruleSet, startingCash, rentMultiplier] of [
+    ["quick", 1200, 2],
+    ["chaos", 1000, 3],
+  ]) {
+    const game = createGame("TEST01", lobby, ruleSet);
+    assert.equal(game.ruleSet, ruleSet);
+    assert.equal(game.rules.rentMultiplier, rentMultiplier);
+    assert.equal(game.players[0].cash, startingCash);
+
+    const renter = game.players[1];
+    game.currentPlayerIndex = 1;
+    renter.position = 2;
+    game.properties["marine-drive"].ownerId = "player-one";
+    withRandom(0.2, () => performGameAction(game, renter.id, { action: "roll" }));
+
+    assert.equal(renter.cash, startingCash - 8 * rentMultiplier);
+    assert.equal(game.players[0].cash, startingCash + 8 * rentMultiplier);
+  }
+});
+
+test("quick preset pays its configured salary when passing GO", () => {
+  const game = createGame("TEST01", lobby, "quick");
+  for (const property of Object.values(game.properties)) property.ownerId = "player-one";
+  game.players[0].position = 38;
+
+  withRandom(0.5, () => performGameAction(game, "player-one", { action: "roll" }));
+
+  assert.equal(game.players[0].position, 6);
+  assert.equal(game.players[0].cash, 1500);
+});
+
+test("host rule settings override preset starting cash and can disable auctions", () => {
+  const game = createGame("TEST01", lobby, "classic", { startingCash: 2500, auctionsEnabled: false });
+  assert.equal(game.players[0].cash, 2500);
+  assert.equal(game.rules.auctionsEnabled, false);
+  game.phase = "buying";
+  game.pendingPurchase = { propertyId: "dharavi" };
+
+  performGameAction(game, "player-one", { action: "pass" });
+
+  assert.equal(game.phase, "end-turn");
+  assert.equal(game.auction, null);
+  assert.equal(game.properties.dharavi.ownerId, null);
+  assert.match(game.log[0].text, /auctions are disabled/);
+});
+
+test("invalid custom starting cash settings are rejected", () => {
+  assert.throws(
+    () => createGame("TEST01", lobby, "classic", { startingCash: 499, auctionsEnabled: true }),
+    /between â‚¹500 and â‚¹5,000/,
+  );
+});
+
+test("advance-to-GO cards retain their printed â‚¹200 reward in quick mode", () => {
+  const game = createGame("TEST01", lobby, "quick");
+  for (const property of Object.values(game.properties)) property.ownerId = "player-one";
+  game.players[0].position = 38;
+  game.chestDeck[0] = {
+    text: "Advance to GO. Collect â‚¹200.",
+    action: "move",
+    target: 0,
+    collectGo: true,
+  };
+
+  withRandom(0.2, () => performGameAction(game, "player-one", { action: "roll" }));
+
+  assert.equal(game.players[0].position, 0);
+  assert.equal(game.players[0].cash, 1700);
+});
+
+test("unknown game rule presets are rejected", () => {
+  assert.throws(() => createGame("TEST01", lobby, "unknown"), /valid game rule preset/);
+});
+
 test("a non-current player cannot roll", () => {
   const game = createGame("TEST01", lobby);
   assert.throws(() => performGameAction(game, "player-two", { action: "roll" }), /Wait for your turn/);
@@ -183,17 +274,4 @@ test("an auction with no bids leaves the property unowned", () => {
 
   assert.equal(game.properties.dharavi.ownerId, null);
   assert.equal(game.phase, "end-turn");
-});
-
-
-test("game supports ten players with distinct tokens and rejects an eleventh", () => {
-    const players = Array.from({ length: MAX_PLAYERS }, (_, index) => ({
-          id: `player-${index + 1}`,
-          name: `Player ${index + 1}`,
-          connected: true,
-    }));
-    const game = createGame("TEST10", players);
-    assert.equal(game.players.length, 10);
-    assert.equal(new Set(game.players.map((player) => player.token)).size, 10);
-    assert.throws(() => createGame("TEST11", [...players, { id: "player-11", name: "Player 11" }]), /2 to 10 players/);
 });
