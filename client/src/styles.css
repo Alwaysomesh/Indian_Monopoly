@@ -35,7 +35,9 @@ button { cursor: pointer; }
 
 .brand { display: flex; align-items: center; gap: 11px; color: #263b2e; text-decoration: none; font-size: 13px; font-weight: 700; letter-spacing: .11em; }
 .brand strong { color: #c77732; }
-.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border: 2px solid #c77732; border-radius: 50%; color: #c77732; font-family: "Playfair Display", serif; font-size: 22px; }
+.brand-mark { display: block; width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 3px 9px rgba(39, 59, 43, .16); transition: transform .2s ease; }
+.brand:hover .brand-mark { transform: rotate(-8deg) scale(1.04); }
+.brand:focus-visible, .feedback-link:focus-visible { outline: 3px solid rgba(199, 119, 50, .45); outline-offset: 4px; border-radius: 4px; }
 .connection { display: flex; align-items: center; gap: 8px; color: #8b8a7f; font-size: 12px; }
 .connection i { width: 7px; height: 7px; border-radius: 50%; background: #b6aa96; }
 .connection.online i { background: #4b8c63; box-shadow: 0 0 0 3px rgba(75, 140, 99, .14); }
@@ -49,7 +51,8 @@ h1 em { color: #c8793b; font-weight: 600; }
 .features { display: flex; flex-wrap: wrap; gap: 9px; }
 .features span { padding: 9px 12px; border: 1px solid rgba(41, 62, 45, .13); border-radius: 20px; color: #596657; font-size: 11px; }
 
-.join-card { padding: 31px; border: 1px solid rgba(58, 67, 52, .1); border-radius: 12px; background: rgba(255, 253, 247, .92); box-shadow: 0 20px 70px rgba(58, 49, 31, .09); }
+.join-card { padding: 31px; border: 1px solid rgba(58, 67, 52, .1); border-radius: 12px; background: rgba(255, 253, 247, .92); box-shadow: 0 20px 70px rgba(58, 49, 31, .09); transition: transform .22s ease, box-shadow .22s ease; }
+.join-card:hover { transform: translateY(-3px); box-shadow: 0 24px 76px rgba(58, 49, 31, .13); }
 .card-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; }
 .card-heading .eyebrow { margin-bottom: 8px; font-size: 9px; }
 h2 { margin: 0; color: #283b2e; font-family: "Playfair Display", Georgia, serif; font-size: 26px; }
@@ -91,6 +94,9 @@ input::placeholder { color: #aaa99f; }
 
 footer { display: flex; justify-content: space-between; padding: 18px 0 20px; border-top: 1px solid rgba(38, 49, 39, .12); color: #99978b; font-size: 9px; font-weight: 600; letter-spacing: .13em; }
 footer b { color: #c8793b; }
+.feedback-link { color: #777669; font-size: 10px; font-weight: 500; letter-spacing: normal; text-decoration-color: rgba(119, 118, 105, .4); text-underline-offset: 3px; transition: color .16s ease; }
+.feedback-link:hover { color: #a95f2f; }
+.feedback-link strong { color: #a95f2f; }
 
 @media (max-width: 800px) {
   .page-shell { padding: 0 6%; }
@@ -297,11 +303,12 @@ footer b { color: #c8793b; }
 
 @media (max-width: 500px) {
   .table-page { padding-right: max(3%, env(safe-area-inset-right)); padding-left: max(3%, env(safe-area-inset-left)); }
-  .table-topbar { display: grid; height: auto; min-height: 0; grid-template-columns: 1fr auto; grid-template-rows: auto auto; gap: 5px 8px; padding: 8px 0; }
+  .table-topbar { display: grid; height: auto; min-height: 0; grid-template-columns: 1fr auto; grid-template-rows: auto auto auto; gap: 5px 8px; padding: 8px 0; }
   .table-topbar > .brand { grid-column: 1; grid-row: 1; gap: 6px; font-size: 9px; }
   .table-topbar .brand-mark { width: 28px; height: 28px; font-size: 18px; }
   .table-title { grid-column: 1 / -1; grid-row: 2; gap: 7px; }
-  .table-topbar > .quiet-button { grid-column: 2; grid-row: 1; }
+  .table-feedback-link { grid-column: 1; grid-row: 3; justify-self: start; }
+  .table-topbar > .quiet-button { grid-column: 2; grid-row: 3; }
   .room-chip { padding: 6px; font-size: 8px; }
   .table-title .connection { gap: 4px; font-size: 8px; }
   .quiet-button { padding: 4px; font-size: 9px; }
@@ -342,5 +349,6 @@ footer b { color: #c8793b; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .brand-mark, .join-card { transition: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
 }
