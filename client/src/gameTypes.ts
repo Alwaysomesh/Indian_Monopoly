@@ -52,7 +52,8 @@ export interface TradeOffer {
   cashTo: number;
   propertiesFrom: string[];
   propertiesTo: string[];
-  status: "pending" | "accepted" | "rejected" | "cancelled";
+  status: "pending" | "accepted" | "rejected" | "cancelled" | "countered" | "expired";
+  expiresAt: number;
 }
 
 export interface GameChatMessage {
@@ -153,5 +154,16 @@ export type GameAction =
         propertiesTo: string[];
       };
     }
+  | {
+      action: "trade-counter";
+      tradeId: string;
+      trade: {
+        cashFrom: number;
+        cashTo: number;
+        propertiesFrom: string[];
+        propertiesTo: string[];
+      };
+    }
+  | { action: "trade-cancel"; tradeId: string }
   | { action: "trade-reply"; tradeId: string; accept: boolean }
   | { action: "chat"; text: string };
