@@ -4,7 +4,7 @@ An Indian-themed, real-time Monopoly-style game for 2–10 players. The Node.js 
 
 ## Play online
 
-Open [indian-monopoly.onrender.com](https://indian-monopoly.onrender.com), create a private room, share its code with friends, and start when at least two players have joined. Players can buy Indian city and landmark properties, pay rent and taxes, build houses and hotels, mortgage properties, go to jail, bid in property auctions, trade, and chat. In chat, quick reactions add lightweight banter; when a game ends, a match recap highlights the champion, cash leader, property collector, and skyline builder, with an option to copy the recap.
+Open [indian-monopoly.onrender.com](https://indian-monopoly.onrender.com), create a private room, share its code with friends, and start when at least two players have joined. Players can buy Indian city and landmark properties, pay rent and taxes, build houses and hotels, mortgage properties, go to jail, bid in property auctions, trade, and chat. The board keeps your token in view until you scroll manually or pause following. Tap a property on the board to inspect its details, manage your own property, or buy an available space. The Properties tab is a compact ownership list; create trades in the searchable dialog, and proposals and outcomes are announced to everyone in the table log. In chat, quick reactions add lightweight banter; when a game ends, a match recap highlights the champion, cash leader, property collector, and skyline builder, with an option to copy the recap.
 
 In the lobby, the host can remove players and choose a rules preset before starting:
 

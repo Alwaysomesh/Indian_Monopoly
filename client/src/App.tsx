@@ -239,10 +239,11 @@ export default function App() {
       <GameTable
         connected={connected}
         game={game}
-        onAction={(action) => {
+        onAction={(action, onComplete) => {
           setError("");
           socket.emit("game:action", action, (response) => {
             if (!response.ok) setError(response.error ?? "That move could not be completed.");
+            onComplete?.(response);
           });
         }}
         onLeave={leaveRoom}
@@ -525,7 +526,7 @@ function GameTable({
 }: {
   connected: boolean;
   game: GameState;
-  onAction: (action: GameAction) => void;
+  onAction: (action: GameAction, onComplete?: (response: { ok: boolean; error?: string }) => void) => void;
   onLeave: () => void;
   playerId: string;
   error: string;
@@ -544,6 +545,11 @@ function GameTable({
   const [auctionBid, setAuctionBid] = useState("1");
   const [propertiesFrom, setPropertiesFrom] = useState<string[]>([]);
   const [propertiesTo, setPropertiesTo] = useState<string[]>([]);
+  const [tradeSearchFrom, setTradeSearchFrom] = useState("");
+  const [tradeSearchTo, setTradeSearchTo] = useState("");
+  const [tradeError, setTradeError] = useState("");
+  const [showTradeDialog, setShowTradeDialog] = useState(false);
+  const [followPlayerPiece, setFollowPlayerPiece] = useState(true);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [drawnCard, setDrawnCard] = useState("");
   const [celebration, setCelebration] = useState("");
@@ -552,7 +558,6 @@ function GameTable({
   const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const boardSpaceRefs = useRef<Array<HTMLDivElement | null>>([]);
-  const hasFocusedPlayerSpace = useRef(false);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
   const [visualPositions, setVisualPositions] = useState<Record<string, number>>({});
@@ -570,6 +575,10 @@ function GameTable({
   const selectedHouseCost = selectedProperty?.houseCost ? selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1) : 0;
   const selectedRentRelief = game.seasonEvent?.id === "rent-relief" ? 0.5 : 1;
   const selectedPendingPurchase = selectedProperty && game.phase === "buying" && isMyTurn && game.pendingPurchase?.propertyId === selectedProperty.id;
+  const followedPosition = visualPositions[playerId] ?? me?.position;
+  const followedSpace = followedPosition === undefined ? undefined : game.board[followedPosition];
+  const followedProperty = getPropertyForSpace(game, followedSpace?.propertyId);
+  const followedPositionLabel = followedProperty?.name ?? followedSpace?.label ?? "the board";
   const secondsRemaining = game.deadlineAt ? Math.max(0, Math.ceil((game.deadlineAt - now) / 1000)) : null;
   const gameSecondsRemaining = game.gameEndsAt ? Math.max(0, Math.ceil((game.gameEndsAt - now) / 1000)) : null;
 
@@ -579,13 +588,31 @@ function GameTable({
   }, []);
 
   useEffect(() => {
-    if (hasFocusedPlayerSpace.current) return;
-    const player = game.players.find((entry) => entry.id === playerId);
-    const boardSpace = player ? boardSpaceRefs.current[player.position] : null;
+    if (!followPlayerPiece || followedPosition === undefined) return;
+    const boardSpace = boardSpaceRefs.current[followedPosition];
     if (!boardSpace) return;
-    hasFocusedPlayerSpace.current = true;
-    window.requestAnimationFrame(() => boardSpace.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }));
-  }, [game.players, playerId]);
+    const frame = window.requestAnimationFrame(() =>
+      boardSpace.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }),
+    );
+    return () => window.cancelAnimationFrame(frame);
+  }, [followPlayerPiece, followedPosition, isMyTurn]);
+
+  useEffect(() => {
+    const pauseFollowing = () => setFollowPlayerPiece(false);
+    const pauseForScrollKey = (event: KeyboardEvent) => {
+      if (!["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) return;
+      if (event.target instanceof HTMLElement && event.target.closest("input, select, textarea, button, [contenteditable=true]")) return;
+      pauseFollowing();
+    };
+    window.addEventListener("wheel", pauseFollowing, { passive: true });
+    window.addEventListener("touchmove", pauseFollowing, { passive: true });
+    window.addEventListener("keydown", pauseForScrollKey);
+    return () => {
+      window.removeEventListener("wheel", pauseFollowing);
+      window.removeEventListener("touchmove", pauseFollowing);
+      window.removeEventListener("keydown", pauseForScrollKey);
+    };
+  }, []);
 
   useEffect(() => {
     if (tab !== "chat") return;
@@ -659,7 +686,9 @@ function GameTable({
 
     movementTimers.current.forEach(window.clearTimeout);
     movementTimers.current = [];
-    setVisualPositions({});
+    setVisualPositions(Object.fromEntries(
+      movedPlayers.map((player) => [player.id, previousPositions.current[player.id]]),
+    ));
 
     for (const player of movedPlayers) {
       const previous = previousPositions.current[player.id];
@@ -724,7 +753,8 @@ function GameTable({
 
   function submitTrade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!tradeTarget) return;
+    if (!tradeTarget || Number(cashFrom) > (me?.cash ?? 0)) return;
+    setTradeError("");
     onAction({
       action: "trade-offer",
       trade: {
@@ -734,11 +764,19 @@ function GameTable({
         propertiesFrom,
         propertiesTo,
       },
+    }, (response) => {
+      if (!response.ok) {
+        setTradeError(response.error ?? "The trade could not be sent.");
+        return;
+      }
+      setShowTradeDialog(false);
+      setPropertiesFrom([]);
+      setPropertiesTo([]);
+      setCashFrom("0");
+      setCashTo("0");
+      setTradeSearchFrom("");
+      setTradeSearchTo("");
     });
-    setPropertiesFrom([]);
-    setPropertiesTo([]);
-    setCashFrom("0");
-    setCashTo("0");
   }
 
   const rollAvailable = game.phase === "rolling" && isMyTurn && !game.debt;
@@ -794,6 +832,12 @@ function GameTable({
 
           {game.seasonEvent && <div className="season-event" role="status"><small>ROUND {game.roundNumber} · SPECIAL SEASON</small><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
           {error && <p className="game-error" role="alert">{error}</p>}
+          <div className="board-tools">
+            <span aria-live="polite">Your piece: <strong>{followedPositionLabel}</strong></span>
+            <button aria-pressed={followPlayerPiece} onClick={() => setFollowPlayerPiece((following) => !following)}>
+              {followPlayerPiece ? "Pause following" : "Follow my piece"}
+            </button>
+          </div>
           <div className="board-wrap">
             <div className="board-grid">
               <div className="board-center">
@@ -882,6 +926,56 @@ function GameTable({
                   <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Pass</button>
                 </div>}
                 {game.seasonEvent && <p className="property-season-note">{game.seasonEvent.description}</p>}
+              </section>
+            </div>
+          )}
+          {showTradeDialog && (
+            <div className="card-backdrop trade-backdrop" onClick={() => setShowTradeDialog(false)}>
+              <section
+                aria-labelledby="trade-dialog-heading"
+                aria-modal="true"
+                className="trade-dialog"
+                onClick={(event) => event.stopPropagation()}
+                role="dialog"
+              >
+                <button aria-label="Close trade proposal" className="card-dismiss" onClick={() => setShowTradeDialog(false)}>×</button>
+                <small>NEGOTIATE YOUR NEXT MOVE</small>
+                <h2 id="trade-dialog-heading">Propose a trade</h2>
+                <form onSubmit={submitTrade}>
+                  <label htmlFor="trade-target">Trade with</label>
+                  <select id="trade-target" value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
+                    <option value="">Choose a player</option>
+                    {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                  </select>
+                  <div className="trade-cash-fields">
+                    <label>Cash you offer (₹)<input min="0" max={me?.cash ?? 0} step="1" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} /></label>
+                    <label>Cash you request (₹)<input min="0" max={game.players.find((player) => player.id === tradeTarget)?.cash ?? 0} step="1" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} /></label>
+                  </div>
+                  <div className="trade-property-columns">
+                    <div>
+                      <label htmlFor="trade-search-from">Your properties to offer</label>
+                      <input id="trade-search-from" className="trade-search" placeholder="Find a property" value={tradeSearchFrom} onChange={(event) => setTradeSearchFrom(event.target.value)} />
+                      <div className="trade-property-options">
+                        {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
+                          .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchFrom.trim().toLowerCase()))
+                          .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
+                        {!me?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>No tradable properties to offer.</small>}
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="trade-search-to">Their properties to request</label>
+                      <input id="trade-search-to" className="trade-search" placeholder="Find a property" value={tradeSearchTo} onChange={(event) => setTradeSearchTo(event.target.value)} />
+                      <div className="trade-property-options">
+                        {game.players.find((player) => player.id === tradeTarget)?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
+                          .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchTo.trim().toLowerCase()))
+                          .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesTo.includes(id)} onChange={() => toggleSelection(propertiesTo, setPropertiesTo, id)} />{propertyName(game, id)}</label>)}
+                        {tradeTarget && !game.players.find((player) => player.id === tradeTarget)?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>They have no tradable properties.</small>}
+                      </div>
+                    </div>
+                  </div>
+                  {tradeError && <p className="error-message" role="alert">{tradeError}</p>}
+                  <button className="action-button compact-action" disabled={!tradeTarget || game.phase === "finished" || Number(cashFrom) > (me?.cash ?? 0)} type="submit">Send trade proposal</button>
+                </form>
               </section>
             </div>
           )}
@@ -1028,28 +1122,12 @@ function GameTable({
                 ) : me.propertyIds.map((id) => {
                   const property = game.properties[id];
                   if (!property) return null;
-                  const colorSet = Object.values(game.properties).filter((item) => item.group === property.group);
-                  const hasMonopoly = property.group !== "railroad" && property.group !== "utility" && colorSet.every((item) => item.ownerId === playerId);
-                  const allowManage = owedByMe || (isMyTurn && ["rolling", "buying", "end-turn"].includes(game.phase));
                   return (
                     <div className={`owned-property ${property.mortgaged ? "mortgaged-property" : ""}`} key={id}>
                       <span className={`owned-color color-${property.group}`} />
                       <div className="owned-info">
                         <strong>{property.name}</strong>
                         <small>{property.mortgaged ? "Mortgaged" : property.houses === 5 ? "Hotel" : property.houses ? `${property.houses} house${property.houses > 1 ? "s" : ""}` : `Rent ${formatMoney(property.rent[0])}`}</small>
-                      </div>
-                      <div className="property-controls">
-                        {property.mortgaged ? (
-                          <button disabled={!allowManage || game.phase === "debt" || (me.cash < Math.ceil(property.price * 0.55))} onClick={() => onAction({ action: "unmortgage", propertyId: id })}>Unmortgage</button>
-                        ) : (
-                          <button disabled={!allowManage || property.houses > 0} onClick={() => onAction({ action: "mortgage", propertyId: id })}>Mortgage</button>
-                        )}
-                        {hasMonopoly && property.houseCost && !property.mortgaged && (
-                          <>
-                            <button disabled={!allowManage || game.phase === "debt" || property.houses >= 5 || me.cash < property.houseCost} onClick={() => onAction({ action: "build", propertyId: id })}>{property.houses === 4 ? "Build hotel" : "+ House"}</button>
-                            <button disabled={!allowManage || property.houses === 0} onClick={() => onAction({ action: "sell-house", propertyId: id })}>− House</button>
-                          </>
-                        )}
                       </div>
                     </div>
                   );
@@ -1058,26 +1136,7 @@ function GameTable({
             )}
             {tab === "trade" && (
               <div className="trade-panel">
-                <form onSubmit={submitTrade}>
-                  <label>Trade with</label>
-                  <select value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
-                    <option value="">Choose a player</option>
-                    {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
-                  </select>
-                  <label>Cash you offer (₹)</label><input min="0" step="1" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} />
-                  <label>Cash you request (₹)</label><input min="0" step="1" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} />
-                  <label>Your properties to offer</label>
-                  <div className="trade-property-options">
-                    {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged).map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
-                    {!me?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>No tradable properties to offer.</small>}
-                  </div>
-                  <label>Their properties to request</label>
-                  <div className="trade-property-options">
-                    {game.players.find((player) => player.id === tradeTarget)?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged).map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesTo.includes(id)} onChange={() => toggleSelection(propertiesTo, setPropertiesTo, id)} />{propertyName(game, id)}</label>)}
-                    {tradeTarget && !game.players.find((player) => player.id === tradeTarget)?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>They have no tradable properties.</small>}
-                  </div>
-                  <button className="action-button compact-action" disabled={!tradeTarget || game.phase === "finished" || Number(cashFrom) > (me?.cash ?? 0)} type="submit">Propose trade</button>
-                </form>
+                <button className="action-button compact-action" disabled={game.phase === "finished" || game.players.filter((player) => player.id !== playerId && !player.bankrupt).length === 0} onClick={() => { setTradeError(""); setShowTradeDialog(true); }}>Propose a trade</button>
                 <div className="trade-offers">
                   <strong>Trade offers</strong>
                   {game.trades.slice(0, 5).map((trade) => {
