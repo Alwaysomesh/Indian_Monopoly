@@ -39,11 +39,12 @@ const socket: Socket<ServerToClientEvents, ClientToServerEvents> = io(
 );
 
 function getSessionPlayerId() {
-  let id = sessionStorage.getItem("monopoly.player-id");
+  let id = sessionStorage.getItem("monopoly.player-id") ?? localStorage.getItem("monopoly.player-id");
   if (!id) {
     id = crypto.randomUUID();
-    sessionStorage.setItem("monopoly.player-id", id);
   }
+  sessionStorage.setItem("monopoly.player-id", id);
+  localStorage.setItem("monopoly.player-id", id);
   return id;
 }
 
@@ -81,7 +82,9 @@ function getLeaders(players: GameState["players"], score: (player: GameState["pl
 }
 
 export default function App() {
-  const [playerName, setPlayerName] = useState(sessionStorage.getItem("monopoly.player-name") ?? "");
+  const [playerName, setPlayerName] = useState(
+    sessionStorage.getItem("monopoly.player-name") ?? localStorage.getItem("monopoly.player-name") ?? "",
+  );
   const [roomCodeInput, setRoomCodeInput] = useState("");
   const [room, setRoom] = useState<PublicRoom | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
@@ -92,8 +95,8 @@ export default function App() {
   useEffect(() => {
     const onConnect = () => {
       setConnected(true);
-      const savedCode = sessionStorage.getItem("monopoly.room-code");
-      const savedName = sessionStorage.getItem("monopoly.player-name");
+      const savedCode = sessionStorage.getItem("monopoly.room-code") ?? localStorage.getItem("monopoly.room-code");
+      const savedName = sessionStorage.getItem("monopoly.player-name") ?? localStorage.getItem("monopoly.player-name");
       if (savedCode && savedName) {
         socket.emit("room:join", {
           roomCode: savedCode,
@@ -103,8 +106,14 @@ export default function App() {
           if (response.ok && response.room) {
             setRoom(response.room);
             setGame(response.game ?? null);
+            setError("");
+            localStorage.setItem("monopoly.player-name", savedName);
+            localStorage.setItem("monopoly.room-code", response.room.code);
           } else {
-            sessionStorage.removeItem("monopoly.room-code");
+            setRoom(null);
+            setGame(null);
+            setRoomCodeInput(savedCode);
+            setError(response.error ?? "Could not reconnect to the game room.");
           }
         });
       }
@@ -113,6 +122,7 @@ export default function App() {
     const onConnectError = () => setError("Could not connect to the game server. Please retry.");
     const onKicked = () => {
       sessionStorage.removeItem("monopoly.room-code");
+      localStorage.removeItem("monopoly.room-code");
       setRoom(null);
       setGame(null);
       setError("The host removed you from this room.");
@@ -146,6 +156,8 @@ export default function App() {
     setError("");
     sessionStorage.setItem("monopoly.player-name", playerName.trim());
     sessionStorage.setItem("monopoly.room-code", response.room.code);
+    localStorage.setItem("monopoly.player-name", playerName.trim());
+    localStorage.setItem("monopoly.room-code", response.room.code);
   }
 
   function enterRoom(action: "create" | "join") {
@@ -209,6 +221,7 @@ export default function App() {
   function leaveRoom() {
     socket.emit("room:leave");
     sessionStorage.removeItem("monopoly.room-code");
+    localStorage.removeItem("monopoly.room-code");
     setRoom(null);
     setGame(null);
     setError("");
