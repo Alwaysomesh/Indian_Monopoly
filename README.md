@@ -12,11 +12,13 @@ In the lobby, the host can remove players and choose a rules preset before start
 - **Quick:** ₹1,200 starting cash, ₹300 for passing GO, double rent.
 - **Chaos:** ₹1,000 starting cash, ₹400 for passing GO, triple rent.
 
-The host can also customize starting cash from ₹500 to ₹5,000 and turn property auctions on or off before the game starts. If auctions are off, a declined property stays unowned.
+The host can also customize starting cash from ₹500 to ₹5,000, turn property auctions on or off, and optionally enable random season events before the game starts. Seasons are off by default; events can double railway rent, double building costs, halve property rent, or give every active player a festival bonus. If auctions are off, a declined property stays unowned.
+
+Click any city, railway, or utility on the board to view its rent schedule, mortgage and unmortgage amounts, building cost, current owner, and buildings. Ownership markers use each player's color. Trade cash accepts any nonnegative whole-rupee amount. The active player has 30 seconds to roll and 45 seconds for other decisions; an automatic action keeps play moving if a timer expires.
 
 The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
-If a player disconnects during a game, their browser saves their player identity and room so it can automatically rejoin. Reconnecting within 90 seconds preserves their pending action; if they stay offline, the server passes their turn, passes their auction bid, declines a pending property purchase, or declares bankruptcy to clear an unresolved debt.
+If a player disconnects during a game, their browser saves their player identity and room so it can automatically rejoin. After 30 seconds offline, a bot temporarily takes over and makes conservative moves (including managing debt); the player can rejoin the same room at any time and resume control.
 
 ## Run locally
 
