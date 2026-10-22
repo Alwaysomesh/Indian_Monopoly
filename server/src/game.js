@@ -183,6 +183,9 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     roomCode,
     ruleSet,
     rules,
+    roundNumber: 1,
+    lastSeasonEventId: null,
+    seasonEvent: null,
     board: BOARD,
     properties: makeProperties(),
     players: lobbyPlayers.map((player, index) => ({
@@ -217,7 +220,6 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     chat: [],
     log: [{ id: randomBytes(6).toString("hex"), text: "The game is on! Good luck, everyone.", createdAt: Date.now() }],
   };
-  startSeason(game);
   return game;
 }
 
@@ -227,6 +229,7 @@ export function publicGame(game) {
     chestDeck: _chestDeck,
     pendingDebts: _pendingDebts,
     pendingTurnAdvance: _pendingTurnAdvance,
+    lastSeasonEventId: _lastSeasonEventId,
     ...view
   } = game;
   return view;
@@ -240,12 +243,14 @@ function addLog(game, text) {
 function startSeason(game) {
   game.seasonEvent = null;
   if (!game.rules.seasonsEnabled) return;
-  const event = SEASON_EVENTS[Math.floor(Math.random() * SEASON_EVENTS.length)];
+  const availableEvents = SEASON_EVENTS.filter((event) => event.id !== game.lastSeasonEventId);
+  const event = availableEvents[Math.floor(Math.random() * availableEvents.length)];
+  game.lastSeasonEventId = event.id;
   game.seasonEvent = event;
   if (event.id === "festival-bonus") {
     for (const player of activePlayers(game)) player.cash += 200;
   }
-  addLog(game, `Season event: ${event.title}. ${event.description}`);
+  addLog(game, `Special season: ${event.title}. ${event.description}`);
 }
 
 function activePlayers(game) {
@@ -267,10 +272,12 @@ function nextPlayer(game) {
     addLog(game, `${winner[0]?.name ?? "Nobody"} wins the game!`);
     return;
   }
-  let index = game.currentPlayerIndex;
+  const previousIndex = game.currentPlayerIndex;
+  let index = previousIndex;
   do {
     index = (index + 1) % game.players.length;
   } while (game.players[index].bankrupt);
+  const completedRound = index < previousIndex;
   game.currentPlayerIndex = index;
   game.turnNumber += 1;
   game.phase = "rolling";
@@ -278,7 +285,11 @@ function nextPlayer(game) {
   game.doublesCount = 0;
   game.dice = null;
   game.deadlineAt = null;
-  startSeason(game);
+  if (completedRound) {
+    game.roundNumber += 1;
+    game.seasonEvent = null;
+    if (game.roundNumber % 4 === 0) startSeason(game);
+  }
 }
 
 function sendToJail(game, player, reason) {
