@@ -41,6 +41,7 @@ export interface Player {
   bankrupt: boolean;
   connected: boolean;
   botControlled: boolean;
+  isAiBot: boolean;
 }
 
 export interface TradeOffer {
@@ -86,6 +87,9 @@ export interface GameState {
   currentPlayerIndex: number;
   turnNumber: number;
   roundNumber: number;
+  gameEndsAt: number | null;
+  winnerPlayerId: string | null;
+  endReason: "time-limit" | "bankruptcy" | null;
   phase: "waiting" | "rolling" | "buying" | "auction" | "debt" | "end-turn" | "finished";
   dice: [number, number] | null;
   canRollAgain: boolean;
@@ -94,9 +98,11 @@ export interface GameState {
   auction: {
     propertyId: string;
     highestBid: number;
+    minimumBid: number;
     highestBidderId: string | null;
     turnPlayerId: string;
     passedPlayerIds: string[];
+    source: "player" | "bankruptcy" | "sarkari";
   } | null;
   trades: TradeOffer[];
   chat: GameChatMessage[];
@@ -108,6 +114,7 @@ export interface PublicRoom {
   hostId: string;
   ruleSet: "classic" | "quick" | "chaos";
   rules: GameRules;
+  sarkariNeelamiCustomized: boolean;
   players: Array<{ id: string; name: string; connected: boolean }>;
   maxPlayers: number;
 }
@@ -118,6 +125,10 @@ export interface GameRules {
   rentMultiplier: number;
   auctionsEnabled: boolean;
   seasonsEnabled: boolean;
+  gameDurationMinutes: 0 | 30 | 60 | 90 | 120;
+  bankruptAuctionsEnabled: boolean;
+  sarkariNeelamiEnabled: boolean;
+  botCount: number;
 }
 
 export interface RoomResponse {

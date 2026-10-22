@@ -1,6 +1,15 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { advanceDisconnectedPlayer, advanceTimedOutPlayer, BOARD, createGame, MAX_PLAYERS, performGameAction } from "./game.js";
+import {
+  advanceAiPlayer,
+  advanceDisconnectedPlayer,
+  advanceTimedOutPlayer,
+  BOARD,
+  createGame,
+  finishTimedGame,
+  MAX_PLAYERS,
+  performGameAction,
+} from "./game.js";
 
 const lobby = [
   { id: "player-one", name: "Asha", connected: true },
@@ -185,6 +194,172 @@ test("advance-to-GO cards retain their printed ₹200 reward in quick mode", () 
 
 test("unknown game rule presets are rejected", () => {
   assert.throws(() => createGame("TEST01", lobby, "unknown"), /valid game rule preset/);
+});
+
+test("landing exactly on GO pays a double salary while passing only pays the normal salary", () => {
+  const exactGame = createGame("TEST01", lobby);
+  exactGame.players[0].position = 38;
+  withRandom(0, () => performGameAction(exactGame, "player-one", { action: "roll" }));
+  assert.equal(exactGame.players[0].position, 0);
+  assert.equal(exactGame.players[0].cash, 1900);
+  assert.match(exactGame.log[0].text, /lands exactly on GO/);
+
+  const passingGame = createGame("TEST02", lobby);
+  passingGame.players[0].position = 37;
+  withRandom(0.2, () => performGameAction(passingGame, "player-one", { action: "roll" }));
+  assert.equal(passingGame.players[0].position, 1);
+  assert.equal(passingGame.players[0].cash, 1700);
+  assert.match(passingGame.log[0].text, /passes GO/);
+});
+
+test("time limit winner is ranked by cash and then property count", () => {
+  const game = createGame("TEST01", lobby, "classic", { gameDurationMinutes: 30 });
+  game.gameEndsAt = Date.now() - 1;
+  game.players[0].cash = 500;
+  game.players[1].cash = 500;
+  game.players[1].propertyIds.push("goa");
+  game.properties.goa.ownerId = "player-two";
+
+  assert.equal(finishTimedGame(game), true);
+  assert.equal(game.phase, "finished");
+  assert.equal(game.endReason, "time-limit");
+  assert.equal(game.winnerPlayerId, "player-two");
+  assert.match(game.log[0].text, /wins on time/);
+});
+
+test("Sarkari Neelami starts on round four with a half-price opening bid", () => {
+  const game = createGame("TEST01", lobby, "classic", { sarkariNeelamiEnabled: true });
+  const endTurn = () => {
+    const player = game.players[game.currentPlayerIndex];
+    game.phase = "end-turn";
+    withRandom(0, () => performGameAction(game, player.id, { action: "end-turn" }));
+  };
+  endTurn();
+  endTurn();
+  endTurn();
+  endTurn();
+  endTurn();
+  endTurn();
+
+  assert.equal(game.roundNumber, 4);
+  assert.equal(game.phase, "auction");
+  assert.equal(game.auction.source, "sarkari");
+  assert.equal(game.auction.minimumBid, Math.ceil(game.properties[game.auction.propertyId].price / 2));
+  assert.throws(
+    () => performGameAction(game, game.auction.turnPlayerId, {
+      action: "auction-bid",
+      amount: game.auction.minimumBid - 1,
+    }),
+    /Bid at least/,
+  );
+});
+
+test("Sarkari Neelami runs every other round below eight players and every round at eight", () => {
+  const game = createGame("TEST01", lobby, "classic", { sarkariNeelamiEnabled: true });
+  game.roundNumber = 3;
+  const endCurrentRound = () => {
+    for (let index = 0; index < game.players.length; index += 1) {
+      game.phase = "end-turn";
+      performGameAction(game, game.players[game.currentPlayerIndex].id, { action: "end-turn" });
+    }
+  };
+  endCurrentRound();
+  assert.equal(game.roundNumber, 4);
+  assert.equal(game.phase, "auction");
+  while (game.phase === "auction") {
+    performGameAction(game, game.auction.turnPlayerId, { action: "auction-pass" });
+  }
+  endCurrentRound();
+  assert.equal(game.roundNumber, 5);
+  assert.equal(game.phase, "rolling");
+  endCurrentRound();
+  assert.equal(game.roundNumber, 6);
+  assert.equal(game.phase, "auction");
+
+  const eightPlayers = Array.from({ length: 8 }, (_, index) => ({
+    id: `player-${index + 1}`,
+    name: `Player ${index + 1}`,
+    connected: true,
+  }));
+  const largeGame = createGame("TEST08", eightPlayers, "classic", { sarkariNeelamiEnabled: true });
+  largeGame.roundNumber = 3;
+  for (let index = 0; index < eightPlayers.length; index += 1) {
+    largeGame.phase = "end-turn";
+    withRandom(0, () => performGameAction(largeGame, largeGame.players[largeGame.currentPlayerIndex].id, { action: "end-turn" }));
+  }
+  assert.equal(largeGame.roundNumber, 4);
+  assert.equal(largeGame.phase, "auction");
+  while (largeGame.phase === "auction") {
+    performGameAction(largeGame, largeGame.auction.turnPlayerId, { action: "auction-pass" });
+  }
+  for (let index = 0; index < eightPlayers.length; index += 1) {
+    largeGame.phase = "end-turn";
+    performGameAction(largeGame, largeGame.players[largeGame.currentPlayerIndex].id, { action: "end-turn" });
+  }
+  assert.equal(largeGame.roundNumber, 5);
+  assert.equal(largeGame.phase, "auction");
+});
+
+test("bankruptcy auctions returned properties when enabled", () => {
+  const game = createGame("TEST01", lobby, "classic", { bankruptAuctionsEnabled: true });
+  const debtor = game.players[0];
+  debtor.propertyIds.push("dharavi");
+  debtor.propertyIds.push("goa");
+  game.properties.dharavi.ownerId = debtor.id;
+  game.properties.goa.ownerId = debtor.id;
+  game.phase = "debt";
+  game.debt = {
+    debtorId: debtor.id,
+    creditorId: null,
+    amount: 500,
+    reason: "test debt",
+    resumePhase: "end-turn",
+  };
+
+  performGameAction(game, debtor.id, { action: "declare-bankrupt" });
+  assert.equal(game.phase, "auction");
+  assert.equal(game.auction.source, "bankruptcy");
+  assert.equal(game.properties.dharavi.ownerId, null);
+
+  performGameAction(game, "player-two", { action: "auction-pass" });
+  assert.equal(game.phase, "auction");
+  assert.equal(game.properties.goa.ownerId, null);
+  performGameAction(game, "player-two", { action: "auction-pass" });
+  assert.equal(game.phase, "finished");
+  assert.equal(game.winnerPlayerId, "player-two");
+});
+
+test("learning bots make fair trade offers and evaluate incoming offers", () => {
+  const players = [
+    { id: "player-one", name: "Asha", connected: true },
+    { id: "bot-one", name: "Chai Champion", connected: true, isAiBot: true },
+  ];
+  const game = createGame("TEST01", players);
+  game.players[0].propertyIds.push("jaipur");
+  game.properties.jaipur.ownerId = "player-one";
+  game.players[1].propertyIds.push("udaipur");
+  game.properties.udaipur.ownerId = "bot-one";
+  game.currentPlayerIndex = 1;
+
+  assert.equal(advanceAiPlayer(game, "bot-one"), true);
+  assert.equal(game.trades[0].status, "pending");
+  assert.equal(game.trades[0].toPlayerId, "player-one");
+
+  game.trades[0].status = "rejected";
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "bot-one",
+      cashFrom: 0,
+      cashTo: 0,
+      propertiesFrom: ["jaipur"],
+      propertiesTo: ["udaipur"],
+    },
+  });
+  assert.equal(advanceAiPlayer(game, "bot-one"), true);
+  assert.equal(game.trades[0].status, "accepted");
+  assert.equal(game.properties.jaipur.ownerId, "bot-one");
+  assert.equal(game.properties.udaipur.ownerId, "player-one");
 });
 
 test("a non-current player cannot roll", () => {

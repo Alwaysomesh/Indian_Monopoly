@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { io, type Socket } from "socket.io-client";
-import type { GameAction, GameState, PublicRoom, Property, RoomResponse } from "./gameTypes";
+import type { GameAction, GameRules, GameState, PublicRoom, Property, RoomResponse } from "./gameTypes";
+
+const GAME_DURATIONS: GameRules["gameDurationMinutes"][] = [0, 30, 60, 90, 120];
+const BOT_NAMES = ["Chai Champion", "Property Pro", "Market Maharaja", "Smart Investor", "City Strategist"];
+
+function learningBotName(index: number) {
+  return `${BOT_NAMES[index % BOT_NAMES.length]}${index >= BOT_NAMES.length ? ` ${index + 1}` : ""}`;
+}
 
 interface ServerToClientEvents {
   "room:update": (room: PublicRoom) => void;
@@ -19,7 +26,7 @@ interface ClientToServerEvents {
   ) => void;
   "game:start": (payload: Record<string, never>, acknowledge: (response: RoomResponse) => void) => void;
   "room:settings": (
-    payload: { ruleSet: PublicRoom["ruleSet"]; startingCash: number; auctionsEnabled: boolean; seasonsEnabled: boolean },
+    payload: GameRules & { ruleSet: PublicRoom["ruleSet"]; sarkariNeelamiManualChange: boolean },
     acknowledge: (response: { ok: boolean; error?: string }) => void,
   ) => void;
   "room:kick": (
@@ -191,12 +198,11 @@ export default function App() {
 
   function updateRoomRules(
     ruleSet: PublicRoom["ruleSet"],
-    startingCash: number,
-    auctionsEnabled: boolean,
-    seasonsEnabled: boolean,
+    rules: GameRules,
+    sarkariNeelamiManualChange = false,
   ) {
     setError("");
-    socket.emit("room:settings", { ruleSet, startingCash, auctionsEnabled, seasonsEnabled }, (response) => {
+    socket.emit("room:settings", { ruleSet, ...rules, sarkariNeelamiManualChange }, (response) => {
       if (!response.ok) setError(response.error ?? "Could not update the game rules.");
     });
   }
@@ -208,7 +214,7 @@ export default function App() {
       setError("Starting cash must be a whole amount between ₹500 and ₹5,000.");
       return false;
     }
-    updateRoomRules(room.ruleSet, amount, room.rules.auctionsEnabled, room.rules.seasonsEnabled);
+    updateRoomRules(room.ruleSet, { ...room.rules, startingCash: amount });
     return true;
   }
 
@@ -315,7 +321,9 @@ export default function App() {
             <div className="lobby">
               <p className="lobby-label">SHARE THIS CODE WITH YOUR FRIENDS</p>
               <div className="room-code">{room.code}</div>
-              <p className="player-count">{room.players.length} / {room.maxPlayers} players</p>
+              <p className="player-count">
+                {room.players.length} human{room.players.length === 1 ? "" : "s"} + {room.rules.botCount} bots / {room.maxPlayers} seats
+              </p>
               <ul className="player-list">
                 {room.players.map((player, index) => (
                   <li key={player.id}>
@@ -335,6 +343,13 @@ export default function App() {
                     )}
                   </li>
                 ))}
+                {Array.from({ length: room.rules.botCount }, (_, index) => (
+                  <li key={`learning-bot-${index}`}>
+                    <span className={`player-dot dot-${(room.players.length + index) % 10}`} />
+                    {learningBotName(index)}
+                    <small>BOT</small>
+                  </li>
+                ))}
               </ul>
               {room.hostId === playerId ? (
                 <>
@@ -346,7 +361,7 @@ export default function App() {
                       const value = event.target.value;
                       if (value === "classic" || value === "quick" || value === "chaos") {
                         const presetCash = value === "classic" ? 1500 : value === "quick" ? 1200 : 1000;
-                        updateRoomRules(value, presetCash, room.rules.auctionsEnabled, room.rules.seasonsEnabled);
+                        updateRoomRules(value, { ...room.rules, startingCash: presetCash });
                       }
                     }}
                     value={room.ruleSet}
@@ -384,12 +399,10 @@ export default function App() {
                     <input
                       checked={room.rules.auctionsEnabled}
                       id="auctions-enabled"
-                      onChange={(event) => updateRoomRules(
-                        room.ruleSet,
-                        room.rules.startingCash,
-                        event.currentTarget.checked,
-                        room.rules.seasonsEnabled,
-                      )}
+                      onChange={(event) => updateRoomRules(room.ruleSet, {
+                        ...room.rules,
+                        auctionsEnabled: event.currentTarget.checked,
+                      })}
                       type="checkbox"
                     />
                     Enable property auctions when declined
@@ -398,18 +411,82 @@ export default function App() {
                     <input
                       checked={room.rules.seasonsEnabled}
                       id="seasons-enabled"
-                      onChange={(event) => updateRoomRules(
-                        room.ruleSet,
-                        room.rules.startingCash,
-                        room.rules.auctionsEnabled,
-                        event.currentTarget.checked,
-                      )}
+                      onChange={(event) => updateRoomRules(room.ruleSet, {
+                        ...room.rules,
+                        seasonsEnabled: event.currentTarget.checked,
+                      })}
                       type="checkbox"
                     />
                     Enable random season events
                   </label>
-                  <button className="primary-button" disabled={room.players.length < 2} onClick={startGame}>
-                    {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>→</span>
+                  <label className="rules-label" htmlFor="game-duration">Game time limit</label>
+                  <select
+                    className="rule-select"
+                    id="game-duration"
+                    onChange={(event) => {
+                      const duration = GAME_DURATIONS.find((value) => value === Number(event.currentTarget.value));
+                      if (duration !== undefined) {
+                        updateRoomRules(room.ruleSet, { ...room.rules, gameDurationMinutes: duration });
+                      }
+                    }}
+                    value={room.rules.gameDurationMinutes}
+                  >
+                    <option value={0}>No time limit</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={60}>60 minutes</option>
+                    <option value={90}>90 minutes</option>
+                    <option value={120}>120 minutes</option>
+                  </select>
+                  <label className="auction-setting" htmlFor="bankrupt-auctions">
+                    <input
+                      checked={room.rules.bankruptAuctionsEnabled}
+                      id="bankrupt-auctions"
+                      onChange={(event) => updateRoomRules(room.ruleSet, {
+                        ...room.rules,
+                        bankruptAuctionsEnabled: event.currentTarget.checked,
+                      })}
+                      type="checkbox"
+                    />
+                    Auction properties returned by bankrupt players
+                  </label>
+                  <label className="auction-setting" htmlFor="sarkari-neelami">
+                    <input
+                      checked={room.rules.sarkariNeelamiEnabled}
+                      id="sarkari-neelami"
+                      onChange={(event) => updateRoomRules(
+                        room.ruleSet,
+                        { ...room.rules, sarkariNeelamiEnabled: event.currentTarget.checked },
+                        true,
+                      )}
+                      type="checkbox"
+                    />
+                    Sarkari Neelami · automatic from 6+ players
+                  </label>
+                  <p className="rule-description">
+                    Unsold cities go to half-price auctions from round 4: every 2 rounds, or every round with 8+ players.
+                    {room.sarkariNeelamiCustomized ? " Host override is active." : " Default follows player count."}
+                  </p>
+                  <label className="rules-label" htmlFor="bot-count">Learning bots</label>
+                  <select
+                    className="rule-select"
+                    id="bot-count"
+                    onChange={(event) => updateRoomRules(room.ruleSet, {
+                      ...room.rules,
+                      botCount: Number(event.currentTarget.value),
+                    })}
+                    value={room.rules.botCount}
+                  >
+                    {Array.from({ length: Math.min(10, room.maxPlayers - room.players.length + 1) }, (_, count) => (
+                      <option key={count} value={count}>{count === 0 ? "No bots" : `${count} bot${count > 1 ? "s" : ""}`}</option>
+                    ))}
+                  </select>
+                  <p className="rule-description">Add bots to practice solo, or leave seats open for invited friends. Bots trade strategically.</p>
+                  <button
+                    className="primary-button"
+                    disabled={room.players.length + room.rules.botCount < 2}
+                    onClick={startGame}
+                  >
+                    {room.players.length + room.rules.botCount < 2 ? "Add another player or bot" : "Start the game"} <span>→</span>
                   </button>
                 </>
               ) : (
@@ -418,6 +495,7 @@ export default function App() {
                   {" "}· {formatMoney(room.rules.startingCash)} starting cash
                   {" "}· auctions {room.rules.auctionsEnabled ? "on" : "off"}
                   {" "}· seasons {room.rules.seasonsEnabled ? "on" : "off"}.
+                  {" "}· bots {room.rules.botCount}
                   {" "}Waiting for the host to start the game…
                 </p>
               )}
@@ -468,6 +546,7 @@ function GameTable({
   const [propertiesTo, setPropertiesTo] = useState<string[]>([]);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [drawnCard, setDrawnCard] = useState("");
+  const [celebration, setCelebration] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -492,6 +571,7 @@ function GameTable({
   const selectedRentRelief = game.seasonEvent?.id === "rent-relief" ? 0.5 : 1;
   const selectedPendingPurchase = selectedProperty && game.phase === "buying" && isMyTurn && game.pendingPurchase?.propertyId === selectedProperty.id;
   const secondsRemaining = game.deadlineAt ? Math.max(0, Math.ceil((game.deadlineAt - now) / 1000)) : null;
+  const gameSecondsRemaining = game.gameEndsAt ? Math.max(0, Math.ceil((game.gameEndsAt - now) / 1000)) : null;
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 250);
@@ -523,8 +603,46 @@ function GameTable({
   }, [latestLogId]);
 
   useEffect(() => {
-    setAuctionBid(String((game.auction?.highestBid ?? 0) + 1));
-  }, [game.auction?.highestBid]);
+    const latestLog = game.log[0];
+    const text = latestLog?.text ?? "";
+    let message = "";
+    if (/wins (?:on time|the game)/i.test(text)) {
+      message = `🏆 ${game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "A champion"} takes the crown!`;
+    } else if (/lands exactly on GO/i.test(text)) {
+      message = "🎉 Double GO bonus! What a perfect landing!";
+    } else if (/wins .+ at auction/i.test(text)) {
+      message = "🔨 Auction victory! A new address joins the empire.";
+    } else if (/builds a hotel/i.test(text)) {
+      message = "🏨 Hotel milestone! The skyline is rising.";
+    } else if (/builds a house/i.test(text)) {
+      message = "🏠 New construction! Your empire is growing.";
+    } else if (/accepted .+'s trade/i.test(text)) {
+      message = "🤝 Deal sealed! Both empires are reshaping.";
+    } else {
+      const buyer = game.players.find((player) => text.startsWith(`${player.name} buys `));
+      const purchased = buyer && Object.values(game.properties).find((property) =>
+        text.includes(` buys ${property.name} for `),
+      );
+      if (buyer && purchased && buyer.propertyIds.length === 1) {
+        message = "🏙️ First property claimed! The empire begins.";
+      } else if (buyer && purchased && purchased.group !== "railroad" && purchased.group !== "utility" &&
+          Object.values(game.properties).filter((property) => property.group === purchased.group)
+            .every((property) => property.ownerId === buyer.id)) {
+        message = `✨ ${buyer.name} completed a color set!`;
+      }
+    }
+    if (message) setCelebration(message);
+  }, [latestLogId]);
+
+  useEffect(() => {
+    if (!celebration) return;
+    const timeout = window.setTimeout(() => setCelebration(""), 3600);
+    return () => window.clearTimeout(timeout);
+  }, [celebration]);
+
+  useEffect(() => {
+    setAuctionBid(String(Math.max((game.auction?.highestBid ?? 0) + 1, game.auction?.minimumBid ?? 1)));
+  }, [game.auction?.highestBid, game.auction?.minimumBid]);
 
   useEffect(() => {
     const currentPositions: Record<string, number> = {};
@@ -585,10 +703,11 @@ function GameTable({
   }
 
   async function copyGameRecap() {
-    const winner = game.players.find((player) => !player.bankrupt);
+    const winner = game.players.find((player) => player.id === game.winnerPlayerId);
     const recap = [
       `Monopoly India · Room ${game.roomCode}`,
       `Winner: ${winner?.name ?? "Nobody"}`,
+      game.endReason === "time-limit" ? "Game ended when the time limit expired." : "Game ended by bankruptcy.",
       `Cash leader: ${getLeaders(game.players, (player) => player.cash)}`,
       `Property collector: ${getLeaders(game.players, (player) => player.propertyIds.length)} (${Math.max(...game.players.filter((player) => !player.bankrupt).map((player) => player.propertyIds.length), 0)} properties)`,
       `Skyline builder: ${getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}`,
@@ -640,6 +759,7 @@ function GameTable({
             {" · "}{formatMoney(game.rules.startingCash)} START
             {" · "}{game.rules.auctionsEnabled ? "AUCTIONS ON" : "NO AUCTIONS"}
             {" · "}{game.rules.seasonsEnabled ? "SEASONS ON" : "SEASONS OFF"}
+            {" · "}{game.rules.gameDurationMinutes ? `${game.rules.gameDurationMinutes} MIN` : "NO TIME LIMIT"}
           </span>
           <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
         </div>
@@ -652,6 +772,7 @@ function GameTable({
         <button className="quiet-button" onClick={onLeave}>Leave table</button>
       </header>
 
+      {celebration && <div className="milestone-celebration" role="status" aria-live="polite"><span>{celebration}</span></div>}
       <div className="table-layout">
         <section className="board-column">
           <div className="turn-banner">
@@ -660,7 +781,7 @@ function GameTable({
               <strong>
                 {game.phase === "finished" ? "🏆" : currentPlayer?.token}{" "}
                 {game.phase === "finished"
-                  ? `${game.players.find((player) => !player.bankrupt)?.name ?? "Nobody"} wins!`
+                  ? `${game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "Nobody"} wins!`
                   : isMyTurn ? "Your turn" : `${currentPlayer?.name}'s turn`}
               </strong>
             </div>
@@ -668,6 +789,7 @@ function GameTable({
               {game.dice ? <><span key={`die-${game.log[0]?.id}-${game.dice[0]}`}>{game.dice[0]}</span><b>+</b><span key={`die-two-${game.log[0]?.id}-${game.dice[1]}`}>{game.dice[1]}</span></> : "⚄ ⚄"}
             </div>
             {secondsRemaining !== null && <div className={`turn-clock ${secondsRemaining <= 10 ? "turn-clock-urgent" : ""}`} role="timer"><strong>{secondsRemaining}s</strong><span>{game.phase === "rolling" ? "to roll" : "to act"}</span></div>}
+            {gameSecondsRemaining !== null && game.phase !== "finished" && <div className={`turn-clock game-clock ${gameSecondsRemaining <= 300 ? "turn-clock-urgent" : ""}`} role="timer"><strong>{Math.floor(gameSecondsRemaining / 60)}:{String(gameSecondsRemaining % 60).padStart(2, "0")}</strong><span>game time</span></div>}
           </div>
 
           {game.seasonEvent && <div className="season-event" role="status"><small>ROUND {game.roundNumber} · SPECIAL SEASON</small><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
@@ -690,7 +812,7 @@ function GameTable({
                 const position = spacePosition(index);
                 return (
                   <div
-                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""}`}
+                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""} ${property?.mortgaged ? "is-mortgaged" : ""}`}
                     key={space.id}
                     ref={(element) => { boardSpaceRefs.current[index] = element; }}
                     onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
@@ -704,6 +826,7 @@ function GameTable({
                     <span className="space-label">{property?.name ?? space.label}</span>
                     {property && <span className="space-price">{formatMoney(property.price)}</span>}
                     {owner && <span aria-label={`Owned by ${owner.name} (${owner.token})`} className="owner-mark" title={`${owner.name} · ${owner.token}`} style={{ background: playerColor(game.players.indexOf(owner)) }}>{owner.token}</span>}
+                    {property?.mortgaged && <span className="mortgage-mark" aria-label="Mortgaged to the bank">BANK</span>}
                     {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "🏨" : "🏠".repeat(Math.min(property.houses, 4))}</span>}
                     {occupants.length > 0 && (
                       <span className="space-tokens">
@@ -732,6 +855,7 @@ function GameTable({
                 <span className={`property-detail-band color-${selectedProperty.group}`} />
                 <small>PROPERTY DETAILS · {selectedProperty.group.replace(/([A-Z])/g, " $1").toUpperCase()}</small>
                 <h2>{selectedProperty.name}</h2>
+                {selectedProperty.mortgaged && <p className="mortgage-status-card"><span aria-hidden="true">🏦</span> MORTGAGED TO THE BANK · No rent collected</p>}
                 {selectedOwner ? <p className="property-owner-name"><i style={{ background: playerColor(game.players.indexOf(selectedOwner)) }} />Owned by {selectedOwner.name}</p> : <p className="property-owner-name">Unowned · available for purchase when a player lands here</p>}
                 <div className="property-detail-grid">
                   <p><span>Purchase price</span><strong>{formatMoney(selectedProperty.price)}</strong></p>
@@ -767,7 +891,7 @@ function GameTable({
                 <span className="token-badge" style={{ background: playerColor(index) }}>{player.token}</span>
                 <span className="player-card-info">
                   <strong>{player.name}{player.id === playerId ? " (you)" : ""}</strong>
-                  <small>{player.bankrupt ? "Bankrupt" : player.inJail ? "In Jail" : player.connected ? "In the game" : player.botControlled ? "Bot playing · reconnect anytime" : "Reconnecting…"}</small>
+                  <small>{player.bankrupt ? "Bankrupt" : player.isAiBot ? "Learning bot · strategic trader" : player.inJail ? "In Jail" : player.connected ? "In the game" : player.botControlled ? "Bot playing · reconnect anytime" : "Reconnecting…"}</small>
                 </span>
                 <b key={`cash-${player.id}-${player.cash}`} className="cash-counter">{formatMoney(player.cash)}</b>
               </div>
@@ -779,7 +903,7 @@ function GameTable({
           <section className="action-panel">
             <p className="panel-kicker">YOUR MOVE</p>
             {game.phase === "finished" ? (
-              <div className="action-message">The game is over. Thanks for playing!</div>
+              <div className="action-message">{game.endReason === "time-limit" ? "Time is up! The champion is ranked by cash, then properties." : "The game is over. Thanks for playing!"}</div>
             ) : owedByMe ? (
               <>
                 <div className="action-message debt-message">
@@ -797,19 +921,19 @@ function GameTable({
                 <>
                   <div className="action-message">
                     <strong>{propertyName(game, game.auction.propertyId)} auction</strong>
-                    <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : "No bids yet — start at ₹1."}</span>
+                    <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : `No bids yet — opening bid ${formatMoney(game.auction.minimumBid)}.`}</span>
                   </div>
                   <label className="auction-label" htmlFor="auction-bid">Your bid (₹)</label>
                   <input
                     id="auction-bid"
-                    min={game.auction.highestBid + 1}
+                    min={Math.max(game.auction.highestBid + 1, game.auction.minimumBid)}
                     onChange={(event) => setAuctionBid(event.target.value)}
                     type="number"
                     value={auctionBid}
                   />
                   <button
                     className="action-button"
-                    disabled={!Number.isSafeInteger(Number(auctionBid)) || Number(auctionBid) <= game.auction.highestBid || Number(auctionBid) > (me?.cash ?? 0)}
+                    disabled={!Number.isSafeInteger(Number(auctionBid)) || Number(auctionBid) < Math.max(game.auction.highestBid + 1, game.auction.minimumBid) || Number(auctionBid) > (me?.cash ?? 0)}
                     onClick={() => onAction({ action: "auction-bid", amount: Number(auctionBid) })}
                   >
                     Bid {formatMoney(Number(auctionBid) || 0)}
@@ -819,7 +943,7 @@ function GameTable({
               ) : (
                 <div className="action-message">
                   <strong>{game.players.find((player) => player.id === game.auction?.turnPlayerId)?.name} is bidding</strong>
-                  <span>{game.auction.highestBidderId ? `High bid: ${formatMoney(game.auction.highestBid)}` : "No bids yet."}</span>
+                  <span>{game.auction.highestBidderId ? `High bid: ${formatMoney(game.auction.highestBid)}` : `Opening at ${formatMoney(game.auction.minimumBid)}.`}</span>
                 </div>
               )
             ) : !isMyTurn ? (
@@ -879,7 +1003,7 @@ function GameTable({
               <div className="panel-heading"><h3 id="recap-heading">Match highlights</h3><span>FINAL STATS</span></div>
               <div className="recap-winner">
                 <span aria-hidden="true">🏆</span>
-                <div><small>CHAMPION</small><strong>{game.players.find((player) => !player.bankrupt)?.name ?? "No winner"}</strong></div>
+                <div><small>{game.endReason === "time-limit" ? "TIME-LIMIT CHAMPION" : "CHAMPION"}</small><strong>{game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "No winner"}</strong></div>
               </div>
               <div className="recap-awards">
                 <p><span>💰 Cash leader</span><strong>{getLeaders(game.players, (player) => player.cash)}</strong></p>
@@ -908,7 +1032,7 @@ function GameTable({
                   const hasMonopoly = property.group !== "railroad" && property.group !== "utility" && colorSet.every((item) => item.ownerId === playerId);
                   const allowManage = owedByMe || (isMyTurn && ["rolling", "buying", "end-turn"].includes(game.phase));
                   return (
-                    <div className="owned-property" key={id}>
+                    <div className={`owned-property ${property.mortgaged ? "mortgaged-property" : ""}`} key={id}>
                       <span className={`owned-color color-${property.group}`} />
                       <div className="owned-info">
                         <strong>{property.name}</strong>

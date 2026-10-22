@@ -397,3 +397,15 @@ footer b { color: #c8793b; }
 @media (max-width: 760px) { .owner-mark { width: 16px; height: 16px; font-size: 9px; } }
 
 .season-event small { flex: 0 0 100%; color: #a5652c; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
+
+.mortgage-mark { position: absolute; right: 3px; bottom: 17px; z-index: 2; padding: 2px 3px; border: 1px solid #9c4d3d; border-radius: 3px; background: #fff0e9; color: #9c3f31; font-size: clamp(5px, .55vw, 7px); font-weight: 900; letter-spacing: .06em; line-height: 1; transform: rotate(-8deg); }
+.board-space.is-mortgaged { background: #f1ebe2; color: #766f66; }
+.board-space.is-mortgaged .space-color { filter: grayscale(.8); opacity: .7; }
+.mortgaged-property { border-color: #d7a394; background: #fff7f1; }
+.mortgaged-property .owned-color { filter: grayscale(.75); }
+.mortgage-status-card { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 12px; border: 1px solid #e5b3a3; border-radius: 7px; background: linear-gradient(110deg, #fff0e8, #f5e5d9); color: #913f32; font-size: 10px; font-weight: 800; letter-spacing: .04em; }
+.mortgage-status-card span { display: grid; width: 28px; height: 28px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #f7d8c9; font-size: 16px; }
+.game-clock { border-color: #d7c59e; background: #fff8e8; color: #8d5e24; }
+.milestone-celebration { position: fixed; top: 74px; left: 50%; z-index: 30; width: max-content; max-width: min(90vw, 560px); padding: 11px 18px; border: 1px solid #e9c77e; border-radius: 999px; background: linear-gradient(110deg, #fff8d9, #fff0c6); box-shadow: 0 10px 32px rgba(120, 84, 22, .22); color: #744b16; font-size: 13px; font-weight: 800; text-align: center; transform: translateX(-50%); animation: milestone-pop 3.6s ease both; pointer-events: none; }
+@keyframes milestone-pop { 0% { opacity: 0; transform: translate(-50%, -12px) scale(.92); } 12%, 82% { opacity: 1; transform: translate(-50%, 0) scale(1); } 100% { opacity: 0; transform: translate(-50%, -8px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .milestone-celebration { animation-duration: .01ms; } }
