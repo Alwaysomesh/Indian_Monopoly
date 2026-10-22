@@ -7,6 +7,7 @@ export const RULE_PRESETS = {
   quick: { startingCash: 1200, goSalary: 300, rentMultiplier: 2, auctionsEnabled: true, seasonsEnabled: false },
   chaos: { startingCash: 1000, goSalary: 400, rentMultiplier: 3, auctionsEnabled: true, seasonsEnabled: false },
 };
+const GAME_DURATIONS = [0, 30, 60, 90, 120];
 
 const SEASON_EVENTS = [
   { id: "railway-rush", title: "Railway Rush", description: "Railway rent is doubled this turn." },
@@ -140,6 +141,7 @@ function makeProperties() {
   for (const [id, name, group, price, rent, houseCost] of propertyData) {
     properties[id] = { id, name, group, price, rent, houseCost, ownerId: null, houses: 0, mortgaged: false };
   }
+
   for (const [id, name, price] of railData) {
     properties[id] = { id, name, group: "railroad", price, rent: [25, 50, 100, 200], ownerId: null, houses: 0, mortgaged: false };
   }
@@ -169,6 +171,10 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     startingCash: settings.startingCash ?? preset.startingCash,
     auctionsEnabled: settings.auctionsEnabled ?? preset.auctionsEnabled,
     seasonsEnabled: settings.seasonsEnabled ?? preset.seasonsEnabled,
+    gameDurationMinutes: settings.gameDurationMinutes ?? 0,
+    bankruptAuctionsEnabled: settings.bankruptAuctionsEnabled ?? true,
+    sarkariNeelamiEnabled: settings.sarkariNeelamiEnabled ?? false,
+    botCount: settings.botCount ?? 0,
   };
   if (!Number.isSafeInteger(rules.startingCash) || rules.startingCash < 500 || rules.startingCash > 5000) {
     throw new Error("Starting cash must be between ₹500 and ₹5,000.");
@@ -179,6 +185,20 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
   if (typeof rules.seasonsEnabled !== "boolean") {
     throw new Error("Season setting must be enabled or disabled.");
   }
+  if (!GAME_DURATIONS.includes(rules.gameDurationMinutes)) {
+    throw new Error("Choose no time limit or a 30, 60, 90, or 120 minute game.");
+  }
+  if (typeof rules.bankruptAuctionsEnabled !== "boolean" ||
+      typeof rules.sarkariNeelamiEnabled !== "boolean") {
+    throw new Error("Choose valid auction settings.");
+  }
+  if (!Number.isSafeInteger(rules.botCount) || rules.botCount < 0 || rules.botCount > 9) {
+    throw new Error("Choose between zero and nine learning bots.");
+  }
+  if (lobbyPlayers.length > MAX_PLAYERS) {
+    throw new Error(`Players and bots cannot exceed ${MAX_PLAYERS} seats.`);
+  }
+  const gameEndsAt = rules.gameDurationMinutes ? Date.now() + rules.gameDurationMinutes * 60_000 : null;
   const game = {
     roomCode,
     ruleSet,
@@ -200,12 +220,17 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
       bankrupt: false,
       connected: player.connected !== false,
       botControlled: false,
+      isAiBot: player.isAiBot === true,
+      lastBotTradeTurn: 0,
     })),
     currentPlayerIndex: 0,
     turnNumber: 1,
     phase: "rolling",
     seasonEvent: null,
     deadlineAt: null,
+    gameEndsAt,
+    winnerPlayerId: null,
+    endReason: null,
     dice: null,
     doublesCount: 0,
     canRollAgain: false,
@@ -214,6 +239,8 @@ export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings
     pendingDebts: [],
     pendingTurnAdvance: false,
     auction: null,
+    bankruptcyAuctionQueue: [],
+    auctionContinuation: null,
     chanceDeck: shuffled(CHANCE_CARDS),
     chestDeck: shuffled(CHEST_CARDS),
     trades: [],
@@ -230,9 +257,27 @@ export function publicGame(game) {
     pendingDebts: _pendingDebts,
     pendingTurnAdvance: _pendingTurnAdvance,
     lastSeasonEventId: _lastSeasonEventId,
+    bankruptcyAuctionQueue: _bankruptcyAuctionQueue,
+    auctionContinuation: _auctionContinuation,
     ...view
   } = game;
   return view;
+}
+
+export function finishTimedGame(game) {
+  if (!game.gameEndsAt || game.phase === "finished" || Date.now() < game.gameEndsAt) return false;
+  const contenders = activePlayers(game).sort((left, right) =>
+    right.cash - left.cash || right.propertyIds.length - left.propertyIds.length ||
+    game.players.indexOf(left) - game.players.indexOf(right),
+  );
+  game.winnerPlayerId = contenders[0]?.id ?? null;
+  game.endReason = "time-limit";
+  game.phase = "finished";
+  game.deadlineAt = null;
+  game.auction = null;
+  game.debt = null;
+  addLog(game, `${contenders[0]?.name ?? "Nobody"} wins on time: cash is the first tiebreaker, followed by properties.`);
+  return true;
 }
 
 function addLog(game, text) {
@@ -269,6 +314,8 @@ function nextPlayer(game) {
   const winner = activePlayers(game);
   if (winner.length <= 1) {
     game.phase = "finished";
+    game.winnerPlayerId = winner[0]?.id ?? null;
+    game.endReason = "bankruptcy";
     addLog(game, `${winner[0]?.name ?? "Nobody"} wins the game!`);
     return;
   }
@@ -289,6 +336,7 @@ function nextPlayer(game) {
     game.roundNumber += 1;
     game.seasonEvent = null;
     if (game.roundNumber % 4 === 0) startSeason(game);
+    maybeStartSarkariAuction(game);
   }
 }
 
@@ -331,10 +379,14 @@ function charge(game, fromPlayer, toPlayer, amount, reason) {
 function moveTo(game, player, target, collectGo = false, rentMultiplier = 1) {
   const previous = player.position;
   player.position = ((target % 40) + 40) % 40;
-  if (collectGo || (target >= 40 && Math.floor(target / 40) > Math.floor(previous / 40))) {
-    const salary = collectGo ? 200 : game.rules.goSalary;
+  const exactGo = !collectGo && target > previous && target % 40 === 0;
+  const passedGo = target > previous && Math.floor(target / 40) > Math.floor(previous / 40);
+  if (collectGo || passedGo) {
+    const salary = collectGo ? 200 : game.rules.goSalary * (exactGo ? 2 : 1);
     player.cash += salary;
-    addLog(game, `${player.name} passes GO and collects ₹${salary}.`);
+    addLog(game, exactGo
+      ? `${player.name} lands exactly on GO and collects a total of ₹${salary}!`
+      : `${player.name} passes GO and collects ₹${salary}.`);
   }
   if (game.phase === "debt") return;
   resolveSpace(game, player, rentMultiplier);
@@ -502,6 +554,7 @@ function completeDebt(game, player) {
 
 function finishAuction(game) {
   const auction = game.auction;
+  const continuation = game.auctionContinuation;
   if (auction.highestBidderId) {
     const bidder = playerById(game, auction.highestBidderId);
     const property = game.properties[auction.propertyId];
@@ -513,6 +566,21 @@ function finishAuction(game) {
     addLog(game, `${game.properties[auction.propertyId].name} remains unsold after the auction.`);
   }
   game.auction = null;
+  game.auctionContinuation = null;
+  if (continuation?.source === "bankruptcy") {
+    if (game.bankruptcyAuctionQueue.length > 0) {
+      startAuction(game, game.bankruptcyAuctionQueue.shift(), "bankruptcy", 1);
+      game.auctionContinuation = continuation;
+      return;
+    }
+    advanceDebtQueue(game, continuation.resumePhase);
+    return;
+  }
+  if (continuation?.source === "sarkari") {
+    game.phase = "rolling";
+    game.deadlineAt = null;
+    return;
+  }
   game.phase = game.canRollAgain ? "rolling" : "end-turn";
 }
 
@@ -535,17 +603,45 @@ function advanceAuction(game, previousPlayerId) {
   finishAuction(game);
 }
 
-function startAuction(game, propertyId) {
+function startAuction(game, propertyId, source = "player", minimumBid = 1) {
   game.pendingPurchase = null;
+  game.auctionContinuation = null;
   game.auction = {
     propertyId,
     highestBid: 0,
+    minimumBid,
     highestBidderId: null,
-    turnPlayerId: currentPlayer(game).id,
+    turnPlayerId: source === "player" ? currentPlayer(game).id : activePlayers(game)[0]?.id,
     passedPlayerIds: [],
+    source,
   };
+  if (source !== "player") {
+    game.auctionContinuation = {
+      source,
+      resumePhase: source === "bankruptcy" ? game.debt?.resumePhase ?? "end-turn" : "rolling",
+    };
+  }
   game.phase = "auction";
-  addLog(game, `Bidding is open for ${game.properties[propertyId].name}.`);
+  addLog(game, source === "sarkari"
+    ? `Sarkari Neelami: bidding for ${game.properties[propertyId].name} opens at ₹${minimumBid}.`
+    : source === "bankruptcy"
+      ? `Bank auction: ${game.properties[propertyId].name} is up for bidding.`
+      : `Bidding is open for ${game.properties[propertyId].name}.`);
+}
+
+function maybeStartSarkariAuction(game) {
+  if (!game.rules.sarkariNeelamiEnabled || game.roundNumber < 4) return;
+  const interval = game.players.length >= 8 ? 1 : 2;
+  if ((game.roundNumber - 4) % interval !== 0) return;
+  const unsoldCities = Object.values(game.properties).filter((property) =>
+    property.ownerId === null && property.group !== "railroad" && property.group !== "utility",
+  );
+  if (unsoldCities.length === 0) {
+    addLog(game, "Sarkari Neelami: no unsold cities are available this round.");
+    return;
+  }
+  const property = unsoldCities[Math.floor(Math.random() * unsoldCities.length)];
+  startAuction(game, property.id, "sarkari", Math.ceil(property.price / 2));
 }
 
 function hasMonopoly(game, player, group) {
@@ -615,8 +711,8 @@ export function performGameAction(game, playerId, payload) {
       auction.passedPlayerIds.push(player.id);
     } else {
       const bid = normalizeCash(payload.amount);
-      if (bid === null || bid <= auction.highestBid || bid > player.cash) {
-        throw new Error(`Bid more than ₹${auction.highestBid} and no more than your available cash.`);
+      if (bid === null || bid <= auction.highestBid || bid < auction.minimumBid || bid > player.cash) {
+        throw new Error(`Bid at least ₹${Math.max(auction.minimumBid, auction.highestBid + 1)} and no more than your available cash.`);
       }
       auction.highestBid = bid;
       auction.highestBidderId = player.id;
@@ -769,24 +865,33 @@ export function performGameAction(game, playerId, payload) {
     const resumePhase = game.debt.resumePhase;
     player.bankrupt = true;
     player.cash = 0;
+    const returnedProperties = [];
     for (const id of player.propertyIds) {
       const property = game.properties[id];
       property.ownerId = creditor?.id ?? null;
       if (creditor) creditor.propertyIds.push(id);
       property.houses = 0;
-      if (!creditor) property.mortgaged = false;
+      if (!creditor) {
+        property.mortgaged = false;
+        returnedProperties.push(property.id);
+      }
     }
     player.propertyIds = [];
-    addLog(game, `${player.name} is bankrupt${creditor ? `; their properties go to ${creditor.name}` : ""}.`);
-    if (debtorWasCurrent) {
-      game.pendingTurnAdvance = true;
+    addLog(game, `${player.name} is bankrupt${creditor ? `; their properties go to ${creditor.name}` : returnedProperties.length ? "; their properties return to the bank" : ""}.`);
+    if (debtorWasCurrent || activePlayers(game).length <= 1) game.pendingTurnAdvance = true;
+    game.debt = null;
+    if (!creditor && game.rules.bankruptAuctionsEnabled && returnedProperties.length > 0 &&
+        activePlayers(game).length > 0) {
+      game.bankruptcyAuctionQueue.push(...returnedProperties);
+      const nextPropertyId = game.bankruptcyAuctionQueue.shift();
+      startAuction(game, nextPropertyId, "bankruptcy");
+      game.auctionContinuation = {
+        source: "bankruptcy",
+        resumePhase: resumePhase ?? "end-turn",
+      };
+    } else {
       advanceDebtQueue(game, resumePhase ?? "end-turn");
     }
-    else if (activePlayers(game).length <= 1) {
-      game.debt = null;
-      game.phase = "finished";
-      addLog(game, `${activePlayers(game)[0]?.name ?? "Nobody"} wins the game!`);
-    } else advanceDebtQueue(game, resumePhase ?? "end-turn");
     return;
   }
 
@@ -868,7 +973,12 @@ function advanceAutomatically(game, player) {
     return true;
   }
   if (game.phase === "auction" && game.auction?.turnPlayerId === player.id) {
-    performGameAction(game, player.id, { action: "auction-pass" });
+    const property = game.properties[game.auction.propertyId];
+    const minimumBid = Math.max(game.auction.minimumBid, game.auction.highestBid + 1);
+    const canBid = player.isAiBot && minimumBid <= property.price && minimumBid <= player.cash - 200;
+    performGameAction(game, player.id, canBid
+      ? { action: "auction-bid", amount: minimumBid }
+      : { action: "auction-pass" });
     return true;
   }
   if (game.phase === "buying" && currentPlayer(game).id === player.id) {
@@ -886,6 +996,74 @@ function advanceAutomatically(game, player) {
     return true;
   }
   return false;
+}
+
+function strategicPropertyValue(game, playerId, propertyId) {
+  const property = game.properties[propertyId];
+  if (!property) return 0;
+  const group = Object.values(game.properties).filter((item) => item.group === property.group);
+  const completesSet = property.group !== "railroad" && property.group !== "utility" &&
+    group.filter((item) => item.id !== propertyId).every((item) => item.ownerId === playerId && !item.mortgaged);
+  return property.price + (completesSet ? Math.ceil(property.price * 0.75) : 0);
+}
+
+function resolveAiTrade(game, player) {
+  const offer = game.trades.find((trade) => trade.status === "pending" && trade.toPlayerId === player.id);
+  if (!offer) return false;
+  const received = offer.cashTo + offer.propertiesTo.reduce((sum, id) => sum + strategicPropertyValue(game, player.id, id), 0);
+  const paid = offer.cashFrom + offer.propertiesFrom.reduce((sum, id) => sum + strategicPropertyValue(game, player.id, id), 0);
+  const accepts = player.cash - offer.cashTo + offer.cashFrom >= 100 && received >= paid * 0.9;
+  performGameAction(game, player.id, { action: "trade-reply", tradeId: offer.id, accept: accepts });
+  return true;
+}
+
+function proposeAiTrade(game, bot) {
+  if (game.trades.some((trade) => trade.status === "pending" && trade.fromPlayerId === bot.id)) return false;
+  const humans = activePlayers(game).filter((player) => !player.isAiBot && player.id !== bot.id);
+  const botProperties = bot.propertyIds.filter((id) => {
+    const property = game.properties[id];
+    return !property.mortgaged && !property.houses && property.group !== "railroad" && property.group !== "utility";
+  });
+  for (const human of humans) {
+    const humanProperties = human.propertyIds.filter((id) => {
+      const property = game.properties[id];
+      return !property.mortgaged && !property.houses && property.group !== "railroad" && property.group !== "utility";
+    });
+    for (const fromId of botProperties) {
+      for (const toId of humanProperties) {
+        const botReceives = strategicPropertyValue(game, bot.id, toId);
+        const botPays = strategicPropertyValue(game, bot.id, fromId);
+        const humanReceives = strategicPropertyValue(game, human.id, fromId);
+        const humanPays = strategicPropertyValue(game, human.id, toId);
+        if (botReceives >= botPays * 0.95 && humanReceives >= humanPays * 0.95) {
+          performGameAction(game, bot.id, {
+            action: "trade-offer",
+            trade: {
+              toPlayerId: human.id,
+              cashFrom: 0,
+              cashTo: 0,
+              propertiesFrom: [fromId],
+              propertiesTo: [toId],
+            },
+          });
+          addLog(game, `${bot.name} made a strategic property trade offer to ${human.name}.`);
+          return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
+export function advanceAiPlayer(game, playerId) {
+  const player = playerById(game, playerId);
+  if (!player || !player.isAiBot || player.bankrupt || game.phase === "finished") return false;
+  if (resolveAiTrade(game, player)) return true;
+  if (currentPlayer(game).id === player.id && player.lastBotTradeTurn !== game.turnNumber) {
+    player.lastBotTradeTurn = game.turnNumber;
+    if (proposeAiTrade(game, player)) return true;
+  }
+  return advanceAutomatically(game, player);
 }
 
 export function advanceDisconnectedPlayer(game, playerId) {
