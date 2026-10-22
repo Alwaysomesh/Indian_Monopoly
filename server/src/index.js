@@ -7,6 +7,7 @@ import { createServer } from "node:http";
 import { Server } from "socket.io";
 import {
   advanceDisconnectedPlayer,
+  advanceTimedOutPlayer,
   createGame,
   MAX_PLAYERS,
   performGameAction,
@@ -15,7 +16,14 @@ import {
 } from "./game.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const OFFLINE_TURN_GRACE_MS = 90_000;
+const OFFLINE_BOT_GRACE_MS = 30_000;
+const ROLL_DEADLINE_MS = 30_000;
+const ACTION_DEADLINE_MS = 45_000;
+const DEADLINE_ACTIONS = new Set([
+  "roll", "jail-roll", "jail-pay", "buy", "pass", "auction", "auction-bid",
+  "auction-pass", "end-turn", "mortgage", "unmortgage", "build",
+  "sell-house", "declare-bankrupt",
+]);
 const rooms = new Map();
 const app = express();
 const httpServer = createServer(app);
@@ -79,12 +87,25 @@ function scheduleOfflineAction(room) {
   const game = room.game;
   const playerId = game ? pendingActionPlayerId(game) : null;
   const player = playerId ? game.players.find((entry) => entry.id === playerId) : null;
-  if (!game || !player || player.connected || room.players.get(playerId)?.connected) {
+  if (!game || !player || game.phase === "finished") {
+    if (game) game.deadlineAt = null;
     clearOfflineActionTimer(room);
     return;
   }
 
-  const actionKey = `${game.turnNumber}:${game.phase}:${playerId}`;
+  const connected = player.connected && room.players.get(playerId)?.connected !== false;
+  if (connected) {
+    room.offlineSince.delete(playerId);
+  } else if (!room.offlineSince.has(playerId)) {
+    room.offlineSince.set(playerId, Date.now());
+  }
+  if (game.deadlineAt === null) {
+    game.deadlineAt = Date.now() + (game.phase === "rolling" ? ROLL_DEADLINE_MS : ACTION_DEADLINE_MS);
+  }
+  const deadlineAt = game.deadlineAt;
+  const takeoverAt = (room.offlineSince.get(playerId) ?? Date.now()) + OFFLINE_BOT_GRACE_MS;
+  const actionAt = connected ? deadlineAt : player.botControlled ? Date.now() + 700 : Math.min(deadlineAt, takeoverAt);
+  const actionKey = `${game.turnNumber}:${game.phase}:${playerId}:${deadlineAt}:${connected ? "connected" : player.botControlled ? "bot" : takeoverAt}`;
   if (room.offlineActionKey === actionKey && room.offlineActionTimer) return;
   clearOfflineActionTimer(room);
   room.offlineActionKey = actionKey;
@@ -93,16 +114,33 @@ function scheduleOfflineAction(room) {
     room.offlineActionKey = null;
     if (rooms.get(room.code) !== room) return;
 
+    const currentGame = room.game;
+    const currentPlayer = currentGame?.players.find((entry) => entry.id === playerId);
+    if (!currentGame || !currentPlayer || currentGame.deadlineAt !== deadlineAt) {
+      scheduleOfflineAction(room);
+      return;
+    }
+    const isConnected = currentPlayer.connected && room.players.get(playerId)?.connected !== false;
+    const currentTakeoverAt = (room.offlineSince.get(playerId) ?? Date.now()) + OFFLINE_BOT_GRACE_MS;
+    if (!isConnected && !currentPlayer.botControlled && Date.now() < currentTakeoverAt && Date.now() < deadlineAt) {
+      scheduleOfflineAction(room);
+      return;
+    }
+
     try {
-      if (advanceDisconnectedPlayer(room.game, playerId)) {
+      const advanced = isConnected
+        ? advanceTimedOutPlayer(currentGame, playerId)
+        : advanceDisconnectedPlayer(currentGame, playerId);
+      if (advanced) {
+        currentGame.deadlineAt = null;
         broadcastRoom(room);
       } else {
         scheduleOfflineAction(room);
       }
     } catch (error) {
-      console.error(`Could not advance disconnected player ${playerId} in room ${room.code}:`, error);
+      console.error(`Could not advance player ${playerId} in room ${room.code}:`, error);
     }
-  }, OFFLINE_TURN_GRACE_MS);
+  }, Math.max(0, actionAt - Date.now()));
 }
 
 function cleanPlayerName(value) {
@@ -126,6 +164,7 @@ function leaveCurrentRoom(socket) {
 
   const player = room.players.get(playerId);
   if (room.game && player) {
+    room.offlineSince.set(playerId, Date.now());
     player.connected = false;
     const gamePlayer = room.game.players.find((entry) => entry.id === playerId);
     if (gamePlayer) gamePlayer.connected = false;
@@ -156,6 +195,8 @@ function joinRoom(socket, room, playerId, name) {
   if (gamePlayer) {
     gamePlayer.name = name;
     gamePlayer.connected = true;
+    gamePlayer.botControlled = false;
+    room.offlineSince.delete(playerId);
   }
   socket.data.roomCode = room.code;
   socket.data.playerId = playerId;
@@ -192,6 +233,7 @@ io.on("connection", (socket) => {
       game: null,
       offlineActionTimer: null,
       offlineActionKey: null,
+      offlineSince: new Map(),
     };
     rooms.set(code, room);
     acknowledge(ack, joinRoom(socket, room, id, name));
@@ -228,7 +270,7 @@ io.on("connection", (socket) => {
     broadcastRoom(room);
   });
 
-  socket.on("room:settings", ({ ruleSet, startingCash, auctionsEnabled } = {}, ack) => {
+  socket.on("room:settings", ({ ruleSet, startingCash, auctionsEnabled, seasonsEnabled } = {}, ack) => {
     const room = rooms.get(socket.data.roomCode);
     const playerId = socket.data.playerId;
     if (!room || !playerId || room.hostId !== playerId) {
@@ -251,11 +293,16 @@ io.on("connection", (socket) => {
       acknowledge(ack, { ok: false, error: "Choose whether property auctions are enabled." });
       return;
     }
+    if (typeof seasonsEnabled !== "boolean") {
+      acknowledge(ack, { ok: false, error: "Choose whether random season events are enabled." });
+      return;
+    }
     room.ruleSet = ruleSet;
     room.rules = {
       ...RULE_PRESETS[ruleSet],
       startingCash,
       auctionsEnabled,
+      seasonsEnabled,
     };
     acknowledge(ack, { ok: true });
     broadcastRoom(room);
@@ -321,6 +368,7 @@ io.on("connection", (socket) => {
     }
     try {
       performGameAction(room.game, playerId, payload);
+      if (DEADLINE_ACTIONS.has(payload?.action)) room.game.deadlineAt = null;
       acknowledge(ack, { ok: true });
       broadcastRoom(room);
     } catch (error) {
