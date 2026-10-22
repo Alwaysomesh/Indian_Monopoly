@@ -5,9 +5,17 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { createGame, MAX_PLAYERS, performGameAction, publicGame, RULE_PRESETS } from "./game.js";
+import {
+  advanceDisconnectedPlayer,
+  createGame,
+  MAX_PLAYERS,
+  performGameAction,
+  publicGame,
+  RULE_PRESETS,
+} from "./game.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
+const OFFLINE_TURN_GRACE_MS = 90_000;
 const rooms = new Map();
 const app = express();
 const httpServer = createServer(app);
@@ -49,6 +57,52 @@ function publicRoom(room) {
 function broadcastRoom(room) {
   io.to(room.code).emit("room:update", publicRoom(room));
   if (room.game) io.to(room.code).emit("game:update", publicGame(room.game));
+  scheduleOfflineAction(room);
+}
+
+function pendingActionPlayerId(game) {
+  if (game.phase === "debt") return game.debt?.debtorId ?? null;
+  if (game.phase === "auction") return game.auction?.turnPlayerId ?? null;
+  if (["rolling", "buying", "end-turn"].includes(game.phase)) {
+    return game.players[game.currentPlayerIndex]?.id ?? null;
+  }
+  return null;
+}
+
+function clearOfflineActionTimer(room) {
+  if (room.offlineActionTimer) clearTimeout(room.offlineActionTimer);
+  room.offlineActionTimer = null;
+  room.offlineActionKey = null;
+}
+
+function scheduleOfflineAction(room) {
+  const game = room.game;
+  const playerId = game ? pendingActionPlayerId(game) : null;
+  const player = playerId ? game.players.find((entry) => entry.id === playerId) : null;
+  if (!game || !player || player.connected || room.players.get(playerId)?.connected) {
+    clearOfflineActionTimer(room);
+    return;
+  }
+
+  const actionKey = `${game.turnNumber}:${game.phase}:${playerId}`;
+  if (room.offlineActionKey === actionKey && room.offlineActionTimer) return;
+  clearOfflineActionTimer(room);
+  room.offlineActionKey = actionKey;
+  room.offlineActionTimer = setTimeout(() => {
+    room.offlineActionTimer = null;
+    room.offlineActionKey = null;
+    if (rooms.get(room.code) !== room) return;
+
+    try {
+      if (advanceDisconnectedPlayer(room.game, playerId)) {
+        broadcastRoom(room);
+      } else {
+        scheduleOfflineAction(room);
+      }
+    } catch (error) {
+      console.error(`Could not advance disconnected player ${playerId} in room ${room.code}:`, error);
+    }
+  }, OFFLINE_TURN_GRACE_MS);
 }
 
 function cleanPlayerName(value) {
@@ -82,6 +136,7 @@ function leaveCurrentRoom(socket) {
     }
   }
   if (room.players.size === 0) {
+    clearOfflineActionTimer(room);
     rooms.delete(code);
   } else {
     broadcastRoom(room);
@@ -135,6 +190,8 @@ io.on("connection", (socket) => {
       players: new Map(),
       kickedPlayerIds: new Set(),
       game: null,
+      offlineActionTimer: null,
+      offlineActionKey: null,
     };
     rooms.set(code, room);
     acknowledge(ack, joinRoom(socket, room, id, name));
@@ -158,11 +215,12 @@ io.on("connection", (socket) => {
       acknowledge(ack, { ok: false, error: "The host removed you from this room." });
       return;
     }
-    if (!room.players.has(id) && room.game) {
+    const isExistingGamePlayer = room.game?.players.some((player) => player.id === id) ?? false;
+    if (room.game && !isExistingGamePlayer) {
       acknowledge(ack, { ok: false, error: "This game has already started." });
       return;
     }
-    if (!room.players.has(id) && room.players.size >= MAX_PLAYERS) {
+    if (!room.game && !room.players.has(id) && room.players.size >= MAX_PLAYERS) {
       acknowledge(ack, { ok: false, error: `This room is full (maximum ${MAX_PLAYERS} players).` });
       return;
     }

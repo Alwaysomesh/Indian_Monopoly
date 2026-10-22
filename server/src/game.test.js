@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { BOARD, createGame, MAX_PLAYERS, performGameAction } from "./game.js";
+import { advanceDisconnectedPlayer, BOARD, createGame, MAX_PLAYERS, performGameAction } from "./game.js";
 
 const lobby = [
   { id: "player-one", name: "Asha", connected: true },
@@ -123,6 +123,72 @@ test("unknown game rule presets are rejected", () => {
 test("a non-current player cannot roll", () => {
   const game = createGame("TEST01", lobby);
   assert.throws(() => performGameAction(game, "player-two", { action: "roll" }), /Wait for your turn/);
+});
+
+test("a disconnected current player is skipped after their grace period", () => {
+  const game = createGame("TEST01", lobby);
+  game.players[0].connected = false;
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-one"), true);
+  assert.equal(game.currentPlayerIndex, 1);
+  assert.equal(game.turnNumber, 2);
+  assert.equal(game.phase, "rolling");
+  assert.match(game.log[0].text, /turn was skipped after disconnecting/);
+});
+
+test("a disconnected player at end of turn advances to the next player", () => {
+  const game = createGame("TEST01", lobby);
+  game.players[0].connected = false;
+  game.phase = "end-turn";
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-one"), true);
+  assert.equal(game.currentPlayerIndex, 1);
+  assert.equal(game.turnNumber, 2);
+  assert.equal(game.phase, "rolling");
+});
+
+test("a disconnected player waiting on a property purchase is passed into the auction", () => {
+  const game = createGame("TEST01", lobby);
+  game.players[0].connected = false;
+  game.phase = "buying";
+  game.pendingPurchase = { propertyId: "dharavi" };
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-one"), true);
+  assert.equal(game.phase, "auction");
+  assert.equal(game.auction.turnPlayerId, "player-one");
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-one"), true);
+  assert.equal(game.auction.turnPlayerId, "player-two");
+});
+
+test("a disconnected debtor is declared bankrupt so the game can resume", () => {
+  const players = [
+    ...lobby,
+    { id: "player-three", name: "Meera", connected: false },
+  ];
+  const game = createGame("TEST01", players);
+  game.phase = "debt";
+  game.debt = {
+    debtorId: "player-three",
+    creditorId: null,
+    amount: 500,
+    reason: "offline debt",
+    resumePhase: "rolling",
+  };
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-three"), true);
+  assert.equal(game.players[2].bankrupt, true);
+  assert.equal(game.debt, null);
+  assert.equal(game.phase, "rolling");
+  assert.equal(game.currentPlayerIndex, 0);
+});
+
+test("connected players are never advanced by offline turn handling", () => {
+  const game = createGame("TEST01", lobby);
+
+  assert.equal(advanceDisconnectedPlayer(game, "player-one"), false);
+  assert.equal(game.currentPlayerIndex, 0);
+  assert.equal(game.turnNumber, 1);
 });
 
 test("third consecutive doubles sends the player to Jail", () => {

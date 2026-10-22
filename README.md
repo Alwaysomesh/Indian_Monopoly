@@ -16,6 +16,8 @@ The host can also customize starting cash from ₹500 to ₹5,000 and turn prope
 
 The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
+If a player disconnects during a game, their browser saves their player identity and room so it can automatically rejoin. Reconnecting within 90 seconds preserves their pending action; if they stay offline, the server passes their turn, passes their auction bid, declines a pending property purchase, or declares bankruptcy to clear an unresolved debt.
+
 ## Run locally
 
 Requires Node.js 20 or newer.
