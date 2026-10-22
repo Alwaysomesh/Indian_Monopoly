@@ -285,6 +285,12 @@ function addLog(game, text) {
   game.log = game.log.slice(0, 40);
 }
 
+function describeTradeAssets(game, cash, propertyIds) {
+  const assets = propertyIds.map((id) => game.properties[id]?.name ?? id);
+  if (cash > 0) assets.unshift(`₹${cash.toLocaleString("en-IN")}`);
+  return assets.join(" + ") || "nothing";
+}
+
 function startSeason(game) {
   game.seasonEvent = null;
   if (!game.rules.seasonsEnabled) return;
@@ -751,7 +757,7 @@ export function performGameAction(game, playerId, payload) {
       status: "pending",
     };
     game.trades.unshift(offer);
-    addLog(game, `${player.name} proposed a trade to ${other.name}.`);
+    addLog(game, `${player.name} proposed a trade to ${other.name}: ${describeTradeAssets(game, offer.cashFrom, offer.propertiesFrom)} for ${describeTradeAssets(game, offer.cashTo, offer.propertiesTo)}.`);
     return;
   }
 
@@ -761,7 +767,7 @@ export function performGameAction(game, playerId, payload) {
     const proposer = playerById(game, offer.fromPlayerId);
     if (payload.accept !== true) {
       offer.status = "rejected";
-      addLog(game, `${player.name} rejected the trade.`);
+      addLog(game, `${player.name} rejected the trade offer from ${proposer?.name ?? "another player"}.`);
       return;
     }
     if (!proposer || proposer.bankrupt || proposer.cash < offer.cashFrom || player.cash < offer.cashTo ||
@@ -772,7 +778,7 @@ export function performGameAction(game, playerId, payload) {
         offer.propertiesFrom.some((id) => game.properties[id]?.mortgaged) ||
         offer.propertiesTo.some((id) => game.properties[id]?.mortgaged)) {
       offer.status = "rejected";
-      addLog(game, "A trade was rejected because its assets changed before acceptance.");
+      addLog(game, `The trade between ${proposer?.name ?? "another player"} and ${player.name} was rejected because its assets changed before acceptance.`);
       return;
     }
     proposer.cash = proposer.cash - offer.cashFrom + offer.cashTo;
@@ -790,7 +796,7 @@ export function performGameAction(game, playerId, payload) {
     completeDebt(game, proposer);
     completeDebt(game, player);
     offer.status = "accepted";
-    addLog(game, `${player.name} accepted ${proposer.name}'s trade.`);
+    addLog(game, `${player.name} accepted ${proposer.name}'s trade: ${describeTradeAssets(game, offer.cashFrom, offer.propertiesFrom)} for ${describeTradeAssets(game, offer.cashTo, offer.propertiesTo)}.`);
     return;
   }
 
