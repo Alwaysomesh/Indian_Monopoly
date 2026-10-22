@@ -186,7 +186,7 @@ io.on("connection", (socket) => {
       return;
     }
     if (!Number.isSafeInteger(startingCash) || startingCash < 500 || startingCash > 5000) {
-      acknowledge(ack, { ok: false, error: "Starting cash must be between â‚¹500 and â‚¹5,000." });
+      acknowledge(ack, { ok: false, error: "Starting cash must be between ₹500 and ₹5,000." });
       return;
     }
     if (typeof auctionsEnabled !== "boolean") {
