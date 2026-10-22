@@ -85,6 +85,7 @@ export interface GameState {
   players: Player[];
   currentPlayerIndex: number;
   turnNumber: number;
+  roundNumber: number;
   phase: "waiting" | "rolling" | "buying" | "auction" | "debt" | "end-turn" | "finished";
   dice: [number, number] | null;
   canRollAgain: boolean;

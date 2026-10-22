@@ -12,9 +12,9 @@ In the lobby, the host can remove players and choose a rules preset before start
 - **Quick:** ₹1,200 starting cash, ₹300 for passing GO, double rent.
 - **Chaos:** ₹1,000 starting cash, ₹400 for passing GO, triple rent.
 
-The host can also customize starting cash from ₹500 to ₹5,000, turn property auctions on or off, and optionally enable random season events before the game starts. Seasons are off by default; events can double railway rent, double building costs, halve property rent, or give every active player a festival bonus. If auctions are off, a declined property stays unowned.
+The host can also customize starting cash from ₹500 to ₹5,000, turn property auctions on or off, and optionally enable random season events before the game starts. With seasons enabled, the first three full player rounds are regular; a random special season begins every fourth full round and lasts through that round. A special season cannot repeat on consecutive special-season rounds. Events can double railway rent, double building costs, halve property rent, or give every active player a festival bonus. If auctions are off, a declined property stays unowned.
 
-Click any city, railway, or utility on the board to view its rent schedule, mortgage and unmortgage amounts, building cost, current owner, and buildings. Ownership markers use each player's color. Trade cash accepts any nonnegative whole-rupee amount. The active player has 30 seconds to roll and 45 seconds for other decisions; an automatic action keeps play moving if a timer expires.
+Click any city, railway, or utility on the board to view its rent schedule, mortgage and unmortgage amounts, building cost, current owner, and buildings. The board initially scrolls to your token; scroll the shared game page to explore the board and controls. Each owned space displays its owner's colored player token. Trade cash accepts any nonnegative whole-rupee amount. The active player has 30 seconds to roll and 45 seconds for other decisions; an automatic action keeps play moving if a timer expires.
 
 The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
