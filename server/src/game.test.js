@@ -596,6 +596,44 @@ test("trade offers cannot include developed properties", () => {
   }), /without buildings/);
 });
 
+test("trade announcements include the exchanged assets and their outcomes", () => {
+  const game = createGame("TEST01", lobby);
+  game.properties.dharavi.ownerId = "player-one";
+  game.players[0].propertyIds.push("dharavi");
+  game.properties.pune.ownerId = "player-two";
+  game.players[1].propertyIds.push("pune");
+
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 75,
+      cashTo: 25,
+      propertiesFrom: ["dharavi"],
+      propertiesTo: ["pune"],
+    },
+  });
+  assert.equal(game.log[0].text, "Asha proposed a trade to Kabir: ₹75 + Dharavi for ₹25 + Pune.");
+
+  const acceptedTrade = game.trades[0];
+  performGameAction(game, "player-two", { action: "trade-reply", tradeId: acceptedTrade.id, accept: true });
+  assert.equal(game.log[0].text, "Kabir accepted Asha's trade: ₹75 + Dharavi for ₹25 + Pune.");
+
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 5,
+      cashTo: 0,
+      propertiesFrom: [],
+      propertiesTo: [],
+    },
+  });
+  const rejectedTrade = game.trades[0];
+  performGameAction(game, "player-two", { action: "trade-reply", tradeId: rejectedTrade.id, accept: false });
+  assert.equal(game.log[0].text, "Kabir rejected the trade offer from Asha.");
+});
+
 test("a player can explicitly start a fair auction that awards it to the highest bidder", () => {
   const game = createGame("TEST01", lobby);
   game.phase = "buying";
