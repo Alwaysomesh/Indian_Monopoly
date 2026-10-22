@@ -389,3 +389,5 @@ footer b { color: #c8793b; }
 .board-space { scroll-margin-block: 48vh; }
 .owner-mark { top: 3px; right: 3px; bottom: auto; z-index: 2; display: grid; width: clamp(15px, 2vw, 22px); height: clamp(15px, 2vw, 22px); place-items: center; border: 1.5px solid #fff; border-radius: 50%; color: #fff; font-size: clamp(8px, .9vw, 12px); font-weight: 700; line-height: 1; text-shadow: 0 1px 2px rgba(0,0,0,.6); box-shadow: 0 0 0 1px rgba(33, 45, 35, .7), 0 1px 3px rgba(0,0,0,.35); }
 @media (max-width: 760px) { .owner-mark { width: 16px; height: 16px; font-size: 9px; } }
+
+.season-event small { flex: 0 0 100%; color: #a5652c; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
