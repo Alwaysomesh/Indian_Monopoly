@@ -714,6 +714,8 @@ function GameTable({
                   <p><span>Mortgage value</span><strong>{formatMoney(Math.floor(selectedProperty.price / 2))}</strong></p>
                   <p><span>Unmortgage cost</span><strong>{formatMoney(Math.ceil(selectedProperty.price * 0.55))}</strong></p>
                   <p><span>House / hotel cost</span><strong>{selectedProperty.houseCost ? formatMoney(selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1)) : "Not available"}</strong></p>
+                  <p><span>Current status</span><strong>{selectedProperty.mortgaged ? "Mortgaged" : "Available"}</strong></p>
+                  <p><span>Buildings</span><strong>{selectedProperty.houses === 5 ? "Hotel" : selectedProperty.houses > 0 ? `${selectedProperty.houses} houses` : "None"}</strong></p>
                 </div>
                 <div className="property-rent-list"><strong>Rent by buildings</strong>{selectedProperty.rent.map((rent, index) => <p key={index}><span>{index === 0 ? "No buildings" : index === 5 ? "Hotel" : `${index} house${index > 1 ? "s" : ""}`}</span><b>{formatMoney(Math.ceil(rent * game.rules.rentMultiplier * (game.seasonEvent?.id === "railway-rush" && selectedProperty.group === "railroad" ? 2 : 1) * (game.seasonEvent?.id === "rent-relief" ? 0.5 : 1)))}</b></p>)}</div>
                 {game.seasonEvent && <p className="property-season-note">{game.seasonEvent.description}</p>}
