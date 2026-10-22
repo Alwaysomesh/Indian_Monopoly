@@ -5,6 +5,7 @@ import type { GameAction, GameState, PublicRoom, Property, RoomResponse } from "
 interface ServerToClientEvents {
   "room:update": (room: PublicRoom) => void;
   "game:update": (game: GameState) => void;
+  "room:kicked": () => void;
 }
 
 interface ClientToServerEvents {
@@ -17,6 +18,14 @@ interface ClientToServerEvents {
     acknowledge: (response: RoomResponse) => void,
   ) => void;
   "game:start": (payload: Record<string, never>, acknowledge: (response: RoomResponse) => void) => void;
+  "room:settings": (
+    payload: { ruleSet: PublicRoom["ruleSet"]; startingCash: number; auctionsEnabled: boolean },
+    acknowledge: (response: { ok: boolean; error?: string }) => void,
+  ) => void;
+  "room:kick": (
+    payload: { targetPlayerId: string },
+    acknowledge: (response: { ok: boolean; error?: string }) => void,
+  ) => void;
   "game:action": (
     payload: GameAction,
     acknowledge: (response: { ok: boolean; error?: string }) => void,
@@ -61,6 +70,16 @@ function getPropertyForSpace(game: GameState, propertyId?: string): Property | n
   return propertyId ? game.properties[propertyId] ?? null : null;
 }
 
+function getLeaders(players: GameState["players"], score: (player: GameState["players"][number]) => number) {
+  const activePlayers = players.filter((player) => !player.bankrupt);
+  if (activePlayers.length === 0) return "Nobody";
+  const highestScore = Math.max(...activePlayers.map(score));
+  return activePlayers
+    .filter((player) => score(player) === highestScore)
+    .map((player) => player.name)
+    .join(" & ");
+}
+
 export default function App() {
   const [playerName, setPlayerName] = useState(sessionStorage.getItem("monopoly.player-name") ?? "");
   const [roomCodeInput, setRoomCodeInput] = useState("");
@@ -92,12 +111,19 @@ export default function App() {
     };
     const onDisconnect = () => setConnected(false);
     const onConnectError = () => setError("Could not connect to the game server. Please retry.");
+    const onKicked = () => {
+      sessionStorage.removeItem("monopoly.room-code");
+      setRoom(null);
+      setGame(null);
+      setError("The host removed you from this room.");
+    };
 
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     socket.on("connect_error", onConnectError);
     socket.on("room:update", setRoom);
     socket.on("game:update", setGame);
+    socket.on("room:kicked", onKicked);
     socket.connect();
     return () => {
       socket.off("connect", onConnect);
@@ -105,6 +131,7 @@ export default function App() {
       socket.off("connect_error", onConnectError);
       socket.off("room:update", setRoom);
       socket.off("game:update", setGame);
+      socket.off("room:kicked", onKicked);
       socket.disconnect();
     };
   }, [playerId]);
@@ -147,6 +174,35 @@ export default function App() {
       } else {
         setError(response.error ?? "Could not start the game.");
       }
+    });
+  }
+
+  function updateRoomRules(
+    ruleSet: PublicRoom["ruleSet"],
+    startingCash: number,
+    auctionsEnabled: boolean,
+  ) {
+    setError("");
+    socket.emit("room:settings", { ruleSet, startingCash, auctionsEnabled }, (response) => {
+      if (!response.ok) setError(response.error ?? "Could not update the game rules.");
+    });
+  }
+
+  function updateStartingCash(value: string) {
+    if (!room) return false;
+    const amount = Number(value);
+    if (!Number.isSafeInteger(amount) || amount < 500 || amount > 5000) {
+      setError("Starting cash must be a whole amount between ₹500 and ₹5,000.");
+      return false;
+    }
+    updateRoomRules(room.ruleSet, amount, room.rules.auctionsEnabled);
+    return true;
+  }
+
+  function kickPlayer(targetPlayerId: string) {
+    setError("");
+    socket.emit("room:kick", { targetPlayerId }, (response) => {
+      if (!response.ok) setError(response.error ?? "Could not remove that player.");
     });
   }
 
@@ -253,15 +309,87 @@ export default function App() {
                     {player.name}
                     {!player.connected && <small>OFFLINE</small>}
                     {player.id === room.hostId && <small>HOST</small>}
+                    {room.hostId === playerId && player.id !== playerId && (
+                      <button
+                        aria-label={`Remove ${player.name}`}
+                        className="kick-button"
+                        onClick={() => kickPlayer(player.id)}
+                        type="button"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </li>
                 ))}
               </ul>
               {room.hostId === playerId ? (
-                <button className="primary-button" disabled={room.players.length < 2} onClick={startGame}>
-                  {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>→</span>
-                </button>
+                <>
+                  <label className="rules-label" htmlFor="rule-set">Game style</label>
+                  <select
+                    className="rule-select"
+                    id="rule-set"
+                    onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === "classic" || value === "quick" || value === "chaos") {
+                        const presetCash = value === "classic" ? 1500 : value === "quick" ? 1200 : 1000;
+                        updateRoomRules(value, presetCash, room.rules.auctionsEnabled);
+                      }
+                    }}
+                    value={room.ruleSet}
+                  >
+                    <option value="classic">Classic — standard rules</option>
+                    <option value="quick">Quick — ₹1,200 start, ₹300 GO, 2× rent</option>
+                    <option value="chaos">Chaos — ₹1,000 start, ₹400 GO, 3× rent</option>
+                  </select>
+                  <p className="rule-description">
+                    {room.ruleSet === "classic"
+                      ? "Traditional rent and ₹200 for passing GO."
+                      : room.ruleSet === "quick"
+                        ? "Faster play: ₹300 for passing GO and double rent."
+                        : "High-stakes chaos: ₹400 for passing GO and triple rent."}
+                  </p>
+                  <label className="rules-label" htmlFor="starting-cash">Starting cash (₹500–₹5,000)</label>
+                  <input
+                    defaultValue={room.rules.startingCash}
+                    id="starting-cash"
+                    key={room.rules.startingCash}
+                    max={5000}
+                    min={500}
+                    onBlur={(event) => {
+                      if (!updateStartingCash(event.currentTarget.value)) {
+                        event.currentTarget.value = String(room.rules.startingCash);
+                      }
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") event.currentTarget.blur();
+                    }}
+                    step={100}
+                    type="number"
+                  />
+                  <label className="auction-setting" htmlFor="auctions-enabled">
+                    <input
+                      checked={room.rules.auctionsEnabled}
+                      id="auctions-enabled"
+                      onChange={(event) => updateRoomRules(
+                        room.ruleSet,
+                        room.rules.startingCash,
+                        event.currentTarget.checked,
+                      )}
+                      type="checkbox"
+                    />
+                    Enable property auctions when declined
+                  </label>
+                  <button className="primary-button" disabled={room.players.length < 2} onClick={startGame}>
+                    {room.players.length < 2 ? "Waiting for one more player" : "Start the game"} <span>→</span>
+                  </button>
+                </>
               ) : (
-                <p className="lobby-hint">Waiting for the host to start the game…</p>
+                <p className="lobby-hint">
+                  Game style: <strong>{room.ruleSet === "classic" ? "Classic" : room.ruleSet === "quick" ? "Quick" : "Chaos"}</strong>
+                  {" "}· {formatMoney(room.rules.startingCash)} starting cash
+                  {" "}· auctions {room.rules.auctionsEnabled ? "on" : "off"}.
+                  {" "}Waiting for the host to start the game…
+                </p>
               )}
               {error && <p className="error-message" role="alert">{error}</p>}
             </div>
@@ -307,6 +435,7 @@ function GameTable({
   const [propertiesTo, setPropertiesTo] = useState<string[]>([]);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [drawnCard, setDrawnCard] = useState("");
+  const [recapStatus, setRecapStatus] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
@@ -388,6 +517,25 @@ function GameTable({
     setChatDraft("");
   }
 
+  async function copyGameRecap() {
+    const winner = game.players.find((player) => !player.bankrupt);
+    const recap = [
+      `Monopoly India · Room ${game.roomCode}`,
+      `Winner: ${winner?.name ?? "Nobody"}`,
+      `Cash leader: ${getLeaders(game.players, (player) => player.cash)}`,
+      `Property collector: ${getLeaders(game.players, (player) => player.propertyIds.length)} (${Math.max(...game.players.filter((player) => !player.bankrupt).map((player) => player.propertyIds.length), 0)} properties)`,
+      `Skyline builder: ${getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}`,
+      `Turns played: ${game.turnNumber}`,
+    ].join("\n");
+
+    try {
+      await navigator.clipboard.writeText(recap);
+      setRecapStatus("Match recap copied!");
+    } catch {
+      setRecapStatus("Could not copy the recap. Check your browser clipboard permissions.");
+    }
+  }
+
   function submitTrade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!tradeTarget) return;
@@ -419,6 +567,11 @@ function GameTable({
         </a>
         <div className="table-title">
           <span className="room-chip">ROOM {game.roomCode}</span>
+          <span className="room-chip rules-chip">
+            {game.ruleSet === "classic" ? "CLASSIC" : game.ruleSet === "quick" ? "QUICK" : "CHAOS"}
+            {" · "}{formatMoney(game.rules.startingCash)} START
+            {" · "}{game.rules.auctionsEnabled ? "AUCTIONS ON" : "NO AUCTIONS"}
+          </span>
           <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
         </div>
         <button className="quiet-button" onClick={onLeave}>Leave table</button>
@@ -601,6 +754,23 @@ function GameTable({
             </div>
           </section>
 
+          {game.phase === "finished" && (
+            <section className="recap-panel" aria-labelledby="recap-heading">
+              <div className="panel-heading"><h3 id="recap-heading">Match highlights</h3><span>FINAL STATS</span></div>
+              <div className="recap-winner">
+                <span aria-hidden="true">🏆</span>
+                <div><small>CHAMPION</small><strong>{game.players.find((player) => !player.bankrupt)?.name ?? "No winner"}</strong></div>
+              </div>
+              <div className="recap-awards">
+                <p><span>💰 Cash leader</span><strong>{getLeaders(game.players, (player) => player.cash)}</strong></p>
+                <p><span>🏙️ Property collector</span><strong>{getLeaders(game.players, (player) => player.propertyIds.length)}</strong></p>
+                <p><span>🏗️ Skyline builder</span><strong>{getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}</strong></p>
+              </div>
+              <button className="action-button recap-copy" onClick={() => void copyGameRecap()}>Copy match recap</button>
+              {recapStatus && <p className="recap-status" role="status">{recapStatus}</p>}
+            </section>
+          )}
+
           <section className="detail-panel">
             <div className="detail-tabs">
               <button className={tab === "properties" ? "selected-tab" : ""} onClick={() => setTab("properties")}>Properties</button>
@@ -686,12 +856,23 @@ function GameTable({
               <div className="chat-panel">
                 <div className="chat-messages">
                   {game.chat.map((message) => (
-                    <div className={`chat-message ${message.playerId === playerId ? "my-message" : ""}`} key={message.id}>
+                    <div className={`chat-message ${message.playerId === playerId ? "my-message" : ""} ${["🎉", "😂", "👀", "🏏", "☕"].includes(message.text) ? "chat-reaction" : ""}`} key={message.id}>
                       <strong>{message.playerName}</strong><p>{message.text}</p>
                     </div>
                   ))}
                   {!game.chat.length && <p className="empty-note">The chai is hot. Start the banter!</p>}
                   <div ref={chatEndRef} />
+                </div>
+                <div className="quick-reactions" aria-label="Quick reactions">
+                  {[
+                    ["🎉", "Celebrate"],
+                    ["😂", "Laugh"],
+                    ["👀", "Surprised"],
+                    ["🏏", "Cricket"],
+                    ["☕", "Chai break"],
+                  ].map(([emoji, label]) => (
+                    <button key={emoji} aria-label={label} title={label} onClick={() => onAction({ action: "chat", text: emoji })}>{emoji}</button>
+                  ))}
                 </div>
                 <form className="chat-form" onSubmit={submitChat}>
                   <input maxLength={240} placeholder="Say something…" value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} />

@@ -1,6 +1,14 @@
 import { randomBytes } from "node:crypto";
 
-export const MIN_PLAYERS = 2; export const MAX_PLAYERS = 10;  export const BOARD = [
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 10;
+export const RULE_PRESETS = {
+  classic: { startingCash: 1500, goSalary: 200, rentMultiplier: 1, auctionsEnabled: true },
+  quick: { startingCash: 1200, goSalary: 300, rentMultiplier: 2, auctionsEnabled: true },
+  chaos: { startingCash: 1000, goSalary: 400, rentMultiplier: 3, auctionsEnabled: true },
+};
+
+export const BOARD = [
   { id: "go", type: "corner", label: "GO" },
   { id: "dharavi", type: "property", propertyId: "dharavi" },
   { id: "chest-1", type: "communityChest", label: "Community Chest" },
@@ -143,19 +151,34 @@ function shuffled(cards) {
   return deck;
 }
 
-export function createGame(roomCode, lobbyPlayers) {
-  if (lobbyPlayers.length < 2 || lobbyPlayers.length > MAX_PLAYERS) {
+export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings = {}) {
+  if (lobbyPlayers.length < MIN_PLAYERS || lobbyPlayers.length > MAX_PLAYERS) {
     throw new Error(`A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players.`);
+  }
+  const preset = RULE_PRESETS[ruleSet];
+  if (!preset) throw new Error("Choose a valid game rule preset.");
+  const rules = {
+    ...preset,
+    startingCash: settings.startingCash ?? preset.startingCash,
+    auctionsEnabled: settings.auctionsEnabled ?? preset.auctionsEnabled,
+  };
+  if (!Number.isSafeInteger(rules.startingCash) || rules.startingCash < 500 || rules.startingCash > 5000) {
+    throw new Error("Starting cash must be between ₹500 and ₹5,000.");
+  }
+  if (typeof rules.auctionsEnabled !== "boolean") {
+    throw new Error("Auction setting must be enabled or disabled.");
   }
   return {
     roomCode,
+    ruleSet,
+    rules,
     board: BOARD,
     properties: makeProperties(),
     players: lobbyPlayers.map((player, index) => ({
       id: player.id,
       name: player.name,
       token: TOKENS[index],
-      cash: 1500,
+      cash: rules.startingCash,
       position: 0,
       propertyIds: [],
       inJail: false,
@@ -269,8 +292,9 @@ function moveTo(game, player, target, collectGo = false, rentMultiplier = 1) {
   const previous = player.position;
   player.position = ((target % 40) + 40) % 40;
   if (collectGo || (target >= 40 && Math.floor(target / 40) > Math.floor(previous / 40))) {
-    player.cash += 200;
-    addLog(game, `${player.name} passes GO and collects ₹200.`);
+    const salary = collectGo ? 200 : game.rules.goSalary;
+    player.cash += salary;
+    addLog(game, `${player.name} passes GO and collects ₹${salary}.`);
   }
   if (game.phase === "debt") return;
   resolveSpace(game, player, rentMultiplier);
@@ -312,7 +336,13 @@ function resolveSpace(game, player, rentMultiplier = 1) {
       return;
     }
     if (property.ownerId !== player.id && !property.mortgaged) {
-      charge(game, player, playerById(game, property.ownerId), rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier, property.name + " rent");
+      charge(
+        game,
+        player,
+        playerById(game, property.ownerId),
+        rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier * game.rules.rentMultiplier,
+        property.name + " rent",
+      );
     }
     return;
   }
@@ -742,6 +772,12 @@ export function performGameAction(game, playerId, payload) {
       player.cash -= property.price;
       addLog(game, `${player.name} buys ${property.name} for ₹${property.price}.`);
     } else {
+      if (!game.rules.auctionsEnabled) {
+        addLog(game, `${property.name} remains unsold; auctions are disabled.`);
+        completeDebt(game, player);
+        if (game.phase !== "debt") game.phase = game.canRollAgain ? "rolling" : "end-turn";
+        return;
+      }
       startAuction(game, property.id);
       return;
     }

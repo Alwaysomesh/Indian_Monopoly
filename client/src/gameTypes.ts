@@ -69,6 +69,8 @@ export interface GameLogEntry {
 
 export interface GameState {
   roomCode: string;
+  ruleSet: PublicRoom["ruleSet"];
+  rules: GameRules;
   board: BoardSpace[];
   properties: Record<string, Property>;
   players: Player[];
@@ -94,8 +96,17 @@ export interface GameState {
 export interface PublicRoom {
   code: string;
   hostId: string;
+  ruleSet: "classic" | "quick" | "chaos";
+  rules: GameRules;
   players: Array<{ id: string; name: string; connected: boolean }>;
   maxPlayers: number;
+}
+
+export interface GameRules {
+  startingCash: number;
+  goSalary: number;
+  rentMultiplier: number;
+  auctionsEnabled: boolean;
 }
 
 export interface RoomResponse {

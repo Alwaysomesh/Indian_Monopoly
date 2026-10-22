@@ -5,10 +5,9 @@ import { fileURLToPath } from "node:url";
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { createGame, performGameAction, publicGame } from "./game.js";
+import { createGame, MAX_PLAYERS, performGameAction, publicGame, RULE_PRESETS } from "./game.js";
 
 const PORT = Number(process.env.PORT ?? 3001);
-const MAX_PLAYERS = 10;
 const rooms = new Map();
 const app = express();
 const httpServer = createServer(app);
@@ -40,6 +39,8 @@ function publicRoom(room) {
   return {
     code: room.code,
     hostId: room.hostId,
+    ruleSet: room.ruleSet,
+    rules: room.rules,
     players: [...room.players.values()].map(({ id, name, connected }) => ({ id, name, connected })),
     maxPlayers: MAX_PLAYERS,
   };
@@ -129,7 +130,10 @@ io.on("connection", (socket) => {
     const room = {
       code,
       hostId: id,
+      ruleSet: "classic",
+      rules: { ...RULE_PRESETS.classic },
       players: new Map(),
+      kickedPlayerIds: new Set(),
       game: null,
     };
     rooms.set(code, room);
@@ -150,15 +154,81 @@ io.on("connection", (socket) => {
       acknowledge(ack, { ok: false, error: "Room not found. Check the code and try again." });
       return;
     }
+    if (room.kickedPlayerIds.has(id)) {
+      acknowledge(ack, { ok: false, error: "The host removed you from this room." });
+      return;
+    }
     if (!room.players.has(id) && room.game) {
       acknowledge(ack, { ok: false, error: "This game has already started." });
       return;
     }
     if (!room.players.has(id) && room.players.size >= MAX_PLAYERS) {
-      acknowledge(ack, { ok: false, error: "This room is full (maximum 10 players)." });
+      acknowledge(ack, { ok: false, error: `This room is full (maximum ${MAX_PLAYERS} players).` });
       return;
     }
     acknowledge(ack, joinRoom(socket, room, id, name));
+    broadcastRoom(room);
+  });
+
+  socket.on("room:settings", ({ ruleSet, startingCash, auctionsEnabled } = {}, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    if (!room || !playerId || room.hostId !== playerId) {
+      acknowledge(ack, { ok: false, error: "Only the room host can change game rules." });
+      return;
+    }
+    if (room.game) {
+      acknowledge(ack, { ok: false, error: "Game rules cannot be changed after the game starts." });
+      return;
+    }
+    if (typeof ruleSet !== "string" || !Object.hasOwn(RULE_PRESETS, ruleSet)) {
+      acknowledge(ack, { ok: false, error: "Choose a valid game rule preset." });
+      return;
+    }
+    if (!Number.isSafeInteger(startingCash) || startingCash < 500 || startingCash > 5000) {
+      acknowledge(ack, { ok: false, error: "Starting cash must be between ₹500 and ₹5,000." });
+      return;
+    }
+    if (typeof auctionsEnabled !== "boolean") {
+      acknowledge(ack, { ok: false, error: "Choose whether property auctions are enabled." });
+      return;
+    }
+    room.ruleSet = ruleSet;
+    room.rules = {
+      ...RULE_PRESETS[ruleSet],
+      startingCash,
+      auctionsEnabled,
+    };
+    acknowledge(ack, { ok: true });
+    broadcastRoom(room);
+  });
+
+  socket.on("room:kick", ({ targetPlayerId } = {}, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    if (!room || !playerId || room.hostId !== playerId) {
+      acknowledge(ack, { ok: false, error: "Only the room host can remove players." });
+      return;
+    }
+    if (room.game) {
+      acknowledge(ack, { ok: false, error: "Players can only be removed before the game starts." });
+      return;
+    }
+    if (typeof targetPlayerId !== "string" || targetPlayerId === playerId || !room.players.has(targetPlayerId)) {
+      acknowledge(ack, { ok: false, error: "That player cannot be removed from the room." });
+      return;
+    }
+    room.players.delete(targetPlayerId);
+    room.kickedPlayerIds.add(targetPlayerId);
+    for (const memberSocket of io.sockets.sockets.values()) {
+      if (memberSocket.data.roomCode === room.code && memberSocket.data.playerId === targetPlayerId) {
+        memberSocket.emit("room:kicked");
+        memberSocket.leave(room.code);
+        memberSocket.data.roomCode = undefined;
+        memberSocket.data.playerId = undefined;
+      }
+    }
+    acknowledge(ack, { ok: true });
     broadcastRoom(room);
   });
 
@@ -174,7 +244,7 @@ io.on("connection", (socket) => {
       return;
     }
     try {
-      room.game = createGame(room.code, publicRoom(room).players);
+      room.game = createGame(room.code, publicRoom(room).players, room.ruleSet, room.rules);
       acknowledge(ack, { ok: true, room: publicRoom(room), game: publicGame(room.game) });
       broadcastRoom(room);
     } catch (error) {
