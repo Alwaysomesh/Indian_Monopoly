@@ -10,6 +10,7 @@ import {
   advanceAiPlayer,
   advanceTimedOutPlayer,
   createGame,
+  expireTradeOffer,
   finishTimedGame,
   MAX_PLAYERS,
   performGameAction,
@@ -23,7 +24,7 @@ const ROLL_DEADLINE_MS = 30_000;
 const ACTION_DEADLINE_MS = 45_000;
 const DEADLINE_ACTIONS = new Set([
   "roll", "jail-roll", "jail-pay", "buy", "pass", "auction", "auction-bid",
-  "auction-pass", "end-turn", "mortgage", "unmortgage", "build", "trade-reply",
+  "auction-pass", "end-turn", "mortgage", "unmortgage", "build",
   "sell-house", "declare-bankrupt",
 ]);
 const rooms = new Map();
@@ -68,6 +69,7 @@ function publicRoom(room) {
 function broadcastRoom(room) {
   scheduleOfflineAction(room);
   scheduleBotTradeReplies(room);
+  scheduleTradeExpirations(room);
   io.to(room.code).emit("room:update", publicRoom(room));
   if (room.game) io.to(room.code).emit("game:update", publicGame(room.game));
 }
@@ -183,10 +185,53 @@ function scheduleBotTradeReplies(room) {
   }
 }
 
+function scheduleTradeExpirations(room) {
+  const game = room.game;
+  const pendingOffers = new Map(
+    (game?.trades ?? [])
+      .filter((trade) => trade.status === "pending")
+      .map((trade) => [trade.id, trade]),
+  );
+
+  for (const [tradeId, timer] of room.tradeTimers) {
+    if (!pendingOffers.has(tradeId)) {
+      clearTimeout(timer);
+      room.tradeTimers.delete(tradeId);
+    }
+  }
+
+  if (!game) return;
+  for (const offer of pendingOffers.values()) {
+    if (room.tradeTimers.has(offer.id)) continue;
+    const timer = setTimeout(() => {
+      room.tradeTimers.delete(offer.id);
+      if (rooms.get(room.code) !== room || room.game !== game) return;
+      if (expireTradeOffer(game, offer.id)) broadcastRoom(room);
+    }, Math.max(0, offer.expiresAt - Date.now()));
+    room.tradeTimers.set(offer.id, timer);
+  }
+}
+
+function clearTradeTimers(room) {
+  for (const timer of room.tradeTimers.values()) clearTimeout(timer);
+  room.tradeTimers.clear();
+}
+
 function updateAutomaticSarkariSetting(room) {
   if (!room.sarkariNeelamiCustomized) {
     room.rules.sarkariNeelamiEnabled = room.players.size + room.rules.botCount >= 6;
   }
+}
+
+function createRoomGame(room) {
+  const bots = Array.from({ length: room.rules.botCount }, (_, index) => ({
+    id: `bot-${room.code}-${index + 1}`,
+    name: ["Chai Champion", "Property Pro", "Market Maharaja", "Smart Investor", "City Strategist"][index % 5] +
+      (index >= 5 ? ` ${index + 1}` : ""),
+    connected: true,
+    isAiBot: true,
+  }));
+  return createGame(room.code, [...publicRoom(room).players, ...bots], room.ruleSet, room.rules);
 }
 
 function cleanPlayerName(value) {
@@ -222,6 +267,9 @@ function leaveCurrentRoom(socket) {
   }
   if (room.players.size === 0) {
     clearOfflineActionTimer(room);
+    clearTradeTimers(room);
+    for (const timer of room.aiTradeTimers.values()) clearTimeout(timer);
+    room.aiTradeTimers.clear();
     rooms.delete(code);
   } else {
     broadcastRoom(room);
@@ -289,6 +337,7 @@ io.on("connection", (socket) => {
       offlineActionKey: null,
       offlineSince: new Map(),
       aiTradeTimers: new Map(),
+      tradeTimers: new Map(),
     };
     rooms.set(code, room);
     acknowledge(ack, joinRoom(socket, room, id, name));
@@ -441,15 +490,34 @@ io.on("connection", (socket) => {
       acknowledge(ack, { ok: false, error: `A game needs 2 to ${MAX_PLAYERS} players or bots.` });
       return;
     }
-    const bots = Array.from({ length: room.rules.botCount }, (_, index) => ({
-      id: `bot-${room.code}-${index + 1}`,
-      name: ["Chai Champion", "Property Pro", "Market Maharaja", "Smart Investor", "City Strategist"][index % 5] +
-        (index >= 5 ? ` ${index + 1}` : ""),
-      connected: true,
-      isAiBot: true,
-    }));
     try {
-      room.game = createGame(room.code, [...publicRoom(room).players, ...bots], room.ruleSet, room.rules);
+      room.game = createRoomGame(room);
+      acknowledge(ack, { ok: true, room: publicRoom(room), game: publicGame(room.game) });
+      broadcastRoom(room);
+    } catch (error) {
+      acknowledge(ack, { ok: false, error: error.message });
+    }
+  });
+
+  socket.on("game:rematch", (_payload, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    if (!room || !playerId || room.hostId !== playerId) {
+      acknowledge(ack, { ok: false, error: "Only the room host can start a rematch." });
+      return;
+    }
+    if (room.game?.phase !== "finished") {
+      acknowledge(ack, { ok: false, error: "The current game must finish before starting a rematch." });
+      return;
+    }
+    try {
+      const nextGame = createRoomGame(room);
+      clearOfflineActionTimer(room);
+      clearTradeTimers(room);
+      for (const timer of room.aiTradeTimers.values()) clearTimeout(timer);
+      room.aiTradeTimers.clear();
+      room.offlineSince.clear();
+      room.game = nextGame;
       acknowledge(ack, { ok: true, room: publicRoom(room), game: publicGame(room.game) });
       broadcastRoom(room);
     } catch (error) {

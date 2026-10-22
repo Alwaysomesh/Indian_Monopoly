@@ -291,6 +291,65 @@ function describeTradeAssets(game, cash, propertyIds) {
   return assets.join(" + ") || "nothing";
 }
 
+const TRADE_EXPIRY_MS = 90_000;
+
+function validateTradeAssets(game, from, to, trade) {
+  const cashFrom = normalizeCash(trade?.cashFrom);
+  const cashTo = normalizeCash(trade?.cashTo);
+  if (!from || !to || from.id === to.id || from.bankrupt || to.bankrupt) {
+    throw new Error("Choose another active player.");
+  }
+  if (cashFrom === null || cashTo === null || cashFrom > from.cash || cashTo > to.cash) {
+    throw new Error("The offered cash amount is invalid or no longer available.");
+  }
+  if (!Array.isArray(trade.propertiesFrom) || !Array.isArray(trade.propertiesTo)) {
+    throw new Error("Choose valid properties for the trade.");
+  }
+  const propertiesFrom = [...new Set(trade.propertiesFrom)];
+  const propertiesTo = [...new Set(trade.propertiesTo)];
+  for (const id of propertiesFrom) {
+    if (!from.propertyIds.includes(id) || game.properties[id]?.houses || game.properties[id]?.mortgaged) {
+      throw new Error("Only unmortgaged properties you own without buildings can be traded.");
+    }
+  }
+  for (const id of propertiesTo) {
+    if (!to.propertyIds.includes(id) || game.properties[id]?.houses || game.properties[id]?.mortgaged) {
+      throw new Error("Only unmortgaged properties without buildings can be traded.");
+    }
+  }
+  return { cashFrom, cashTo, propertiesFrom, propertiesTo };
+}
+
+function createTradeOffer(game, from, to, trade) {
+  const assets = validateTradeAssets(game, from, to, trade);
+  const offer = {
+    id: randomBytes(6).toString("hex"),
+    fromPlayerId: from.id,
+    toPlayerId: to.id,
+    ...assets,
+    status: "pending",
+    expiresAt: Date.now() + TRADE_EXPIRY_MS,
+  };
+  game.trades.unshift(offer);
+  game.trades = game.trades.slice(0, 40);
+  return offer;
+}
+
+export function expireTradeOffer(game, tradeId, now = Date.now()) {
+  const offer = game.trades.find((trade) => trade.id === tradeId && trade.status === "pending");
+  if (!offer || offer.expiresAt > now) return false;
+  offer.status = "expired";
+  const proposer = playerById(game, offer.fromPlayerId);
+  const recipient = playerById(game, offer.toPlayerId);
+  addLog(game, `The trade offer between ${proposer?.name ?? "another player"} and ${recipient?.name ?? "another player"} expired.`);
+  return true;
+}
+
+function expireDueTradeOffers(game) {
+  const now = Date.now();
+  for (const offer of game.trades) expireTradeOffer(game, offer.id, now);
+}
+
 function startSeason(game) {
   game.seasonEvent = null;
   if (!game.rules.seasonsEnabled) return;
@@ -704,6 +763,7 @@ function normalizeCash(value) {
 }
 
 export function performGameAction(game, playerId, payload) {
+  expireDueTradeOffers(game);
   const player = playerById(game, playerId);
   if (!player || player.bankrupt) throw new Error("You are not an active player in this game.");
   const action = payload?.action;
@@ -729,35 +789,30 @@ export function performGameAction(game, playerId, payload) {
   }
 
   if (action === "trade-offer") {
+    if (game.phase === "finished") throw new Error("Trades are unavailable after the game ends.");
     const trade = payload.trade;
     const other = playerById(game, trade?.toPlayerId);
-    const cashOffer = normalizeCash(trade?.cashFrom);
-    const cashRequest = normalizeCash(trade?.cashTo);
-    if (!other || other.id === player.id || other.bankrupt) throw new Error("Choose another active player.");
-    if (cashOffer === null || cashRequest === null || cashOffer > player.cash) throw new Error("The offered cash amount is invalid.");
-    if (!Array.isArray(trade.propertiesFrom) || !Array.isArray(trade.propertiesTo)) throw new Error("Choose valid properties for the trade.");
-    for (const id of trade.propertiesFrom) {
-      if (!player.propertyIds.includes(id) || game.properties[id]?.houses || game.properties[id]?.mortgaged) {
-        throw new Error("Only unmortgaged properties you own without buildings can be traded.");
-      }
-    }
-    for (const id of trade.propertiesTo) {
-      if (!other.propertyIds.includes(id) || game.properties[id]?.houses || game.properties[id]?.mortgaged) {
-        throw new Error("Only unmortgaged properties without buildings can be traded.");
-      }
-    }
-    const offer = {
-      id: randomBytes(6).toString("hex"),
-      fromPlayerId: player.id,
-      toPlayerId: other.id,
-      cashFrom: cashOffer,
-      cashTo: cashRequest,
-      propertiesFrom: [...new Set(trade.propertiesFrom)],
-      propertiesTo: [...new Set(trade.propertiesTo)],
-      status: "pending",
-    };
-    game.trades.unshift(offer);
+    const offer = createTradeOffer(game, player, other, trade);
     addLog(game, `${player.name} proposed a trade to ${other.name}: ${describeTradeAssets(game, offer.cashFrom, offer.propertiesFrom)} for ${describeTradeAssets(game, offer.cashTo, offer.propertiesTo)}.`);
+    return;
+  }
+
+  if (action === "trade-counter") {
+    if (game.phase === "finished") throw new Error("Trades are unavailable after the game ends.");
+    const offer = game.trades.find((trade) => trade.id === payload.tradeId && trade.status === "pending");
+    if (!offer || offer.toPlayerId !== player.id) throw new Error("This trade offer is not for you.");
+    const proposer = playerById(game, offer.fromPlayerId);
+    const counterOffer = createTradeOffer(game, player, proposer, payload.trade);
+    offer.status = "countered";
+    addLog(game, `${player.name} countered ${proposer.name}'s trade offer: ${describeTradeAssets(game, counterOffer.cashFrom, counterOffer.propertiesFrom)} for ${describeTradeAssets(game, counterOffer.cashTo, counterOffer.propertiesTo)}.`);
+    return;
+  }
+
+  if (action === "trade-cancel") {
+    const offer = game.trades.find((trade) => trade.id === payload.tradeId && trade.status === "pending");
+    if (!offer || offer.fromPlayerId !== player.id) throw new Error("You can only withdraw your own pending offer.");
+    offer.status = "cancelled";
+    addLog(game, `${player.name} withdrew the trade offer to ${playerById(game, offer.toPlayerId)?.name ?? "another player"}.`);
     return;
   }
 

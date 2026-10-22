@@ -6,6 +6,7 @@ import {
   advanceTimedOutPlayer,
   BOARD,
   createGame,
+  expireTradeOffer,
   finishTimedGame,
   MAX_PLAYERS,
   performGameAction,
@@ -632,6 +633,118 @@ test("trade announcements include the exchanged assets and their outcomes", () =
   const rejectedTrade = game.trades[0];
   performGameAction(game, "player-two", { action: "trade-reply", tradeId: rejectedTrade.id, accept: false });
   assert.equal(game.log[0].text, "Kabir rejected the trade offer from Asha.");
+});
+
+test("a recipient can counter a trade with validated assets and cash", () => {
+  const game = createGame("TEST01", lobby);
+  game.properties.dharavi.ownerId = "player-one";
+  game.players[0].propertyIds.push("dharavi");
+  game.properties.pune.ownerId = "player-two";
+  game.players[1].propertyIds.push("pune");
+
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 100,
+      cashTo: 0,
+      propertiesFrom: ["dharavi"],
+      propertiesTo: [],
+    },
+  });
+  const original = game.trades[0];
+
+  performGameAction(game, "player-two", {
+    action: "trade-counter",
+    tradeId: original.id,
+    trade: {
+      cashFrom: 50,
+      cashTo: 0,
+      propertiesFrom: ["pune"],
+      propertiesTo: ["dharavi"],
+    },
+  });
+
+  assert.equal(original.status, "countered");
+  assert.equal(game.trades[0].fromPlayerId, "player-two");
+  assert.equal(game.trades[0].toPlayerId, "player-one");
+  assert.equal(game.trades[0].status, "pending");
+  assert.equal(game.log[0].text, "Kabir countered Asha's trade offer: ₹50 + Pune for Dharavi.");
+});
+
+test("trade counters reject unaffordable cash without changing the original offer", () => {
+  const game = createGame("TEST01", lobby);
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 0,
+      cashTo: 0,
+      propertiesFrom: [],
+      propertiesTo: [],
+    },
+  });
+  const original = game.trades[0];
+
+  assert.throws(() => performGameAction(game, "player-two", {
+    action: "trade-counter",
+    tradeId: original.id,
+    trade: {
+      cashFrom: 0,
+      cashTo: 1501,
+      propertiesFrom: [],
+      propertiesTo: [],
+    },
+  }), /cash amount is invalid/);
+  assert.equal(original.status, "pending");
+  assert.equal(game.trades.length, 1);
+});
+
+test("only the proposer can withdraw a pending trade offer", () => {
+  const game = createGame("TEST01", lobby);
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 0,
+      cashTo: 0,
+      propertiesFrom: [],
+      propertiesTo: [],
+    },
+  });
+  const offer = game.trades[0];
+
+  assert.throws(
+    () => performGameAction(game, "player-two", { action: "trade-cancel", tradeId: offer.id }),
+    /only withdraw your own pending offer/,
+  );
+  assert.equal(offer.status, "pending");
+  performGameAction(game, "player-one", { action: "trade-cancel", tradeId: offer.id });
+  assert.equal(offer.status, "cancelled");
+  assert.equal(game.log[0].text, "Asha withdrew the trade offer to Kabir.");
+});
+
+test("pending trade offers expire and cannot be accepted afterward", () => {
+  const game = createGame("TEST01", lobby);
+  performGameAction(game, "player-one", {
+    action: "trade-offer",
+    trade: {
+      toPlayerId: "player-two",
+      cashFrom: 0,
+      cashTo: 0,
+      propertiesFrom: [],
+      propertiesTo: [],
+    },
+  });
+  const offer = game.trades[0];
+
+  assert.equal(expireTradeOffer(game, offer.id, offer.expiresAt - 1), false);
+  offer.expiresAt = Date.now() - 1;
+  assert.throws(
+    () => performGameAction(game, "player-two", { action: "trade-reply", tradeId: offer.id, accept: true }),
+    /not for you/,
+  );
+  assert.equal(offer.status, "expired");
 });
 
 test("a player can explicitly start a fair auction that awards it to the highest bidder", () => {

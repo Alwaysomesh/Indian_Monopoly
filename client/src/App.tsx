@@ -25,6 +25,7 @@ interface ClientToServerEvents {
     acknowledge: (response: RoomResponse) => void,
   ) => void;
   "game:start": (payload: Record<string, never>, acknowledge: (response: RoomResponse) => void) => void;
+  "game:rematch": (payload: Record<string, never>, acknowledge: (response: RoomResponse) => void) => void;
   "room:settings": (
     payload: GameRules & { ruleSet: PublicRoom["ruleSet"]; sarkariNeelamiManualChange: boolean },
     acknowledge: (response: { ok: boolean; error?: string }) => void,
@@ -57,6 +58,17 @@ function getSessionPlayerId() {
 
 function formatMoney(value: number) {
   return `₹${value.toLocaleString("en-IN")}`;
+}
+
+type LogCategory = "deals" | "property" | "money" | "events";
+type MobileGameView = "board" | "players" | "trade" | "chat" | "log";
+
+function getLogCategory(text: string): LogCategory {
+  if (/trade|countered|auction|bid/i.test(text)) return "deals";
+  if (/season|round|turn|draws:|lands exactly on go|go bonus|wins (?:on time|the game)/i.test(text)) return "events";
+  if (/buys |builds |mortgag|unmortgag|house|hotel|property/i.test(text)) return "property";
+  if (/₹|pays|paid|collects|receives|salary|tax|rent|debt|bankrupt|bonus/i.test(text)) return "money";
+  return "events";
 }
 
 function spacePosition(index: number): { gridColumn: number; gridRow: number } {
@@ -239,11 +251,19 @@ export default function App() {
       <GameTable
         connected={connected}
         game={game}
+        isHost={room.hostId === playerId}
         onAction={(action, onComplete) => {
           setError("");
           socket.emit("game:action", action, (response) => {
             if (!response.ok) setError(response.error ?? "That move could not be completed.");
             onComplete?.(response);
+          });
+        }}
+        onRematch={() => {
+          setError("");
+          socket.emit("game:rematch", {}, (response) => {
+            if (response.game) setGame(response.game);
+            if (!response.ok) setError(response.error ?? "Could not start the rematch.");
           });
         }}
         onLeave={leaveRoom}
@@ -519,14 +539,18 @@ export default function App() {
 function GameTable({
   connected,
   game,
-  onAction,
+  isHost,
+  onAction: sendAction,
+  onRematch,
   onLeave,
   playerId,
   error,
 }: {
   connected: boolean;
   game: GameState;
+  isHost: boolean;
   onAction: (action: GameAction, onComplete?: (response: { ok: boolean; error?: string }) => void) => void;
+  onRematch: () => void;
   onLeave: () => void;
   playerId: string;
   error: string;
@@ -549,14 +573,29 @@ function GameTable({
   const [tradeSearchTo, setTradeSearchTo] = useState("");
   const [tradeError, setTradeError] = useState("");
   const [showTradeDialog, setShowTradeDialog] = useState(false);
+  const [counteringTradeId, setCounteringTradeId] = useState<string | null>(null);
   const [followPlayerPiece, setFollowPlayerPiece] = useState(true);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
+  const [mobileView, setMobileView] = useState<MobileGameView>("board");
+  const [logFilter, setLogFilter] = useState<"all" | LogCategory>("all");
+  const [showHelp, setShowHelp] = useState(false);
+  const [showPreferences, setShowPreferences] = useState(false);
+  const [motionEnabled, setMotionEnabled] = useState(() => {
+    const savedPreference = localStorage.getItem("monopoly.motion-enabled");
+    return savedPreference === null
+      ? typeof window.matchMedia !== "function" || !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : savedPreference === "true";
+  });
+  const [soundEnabled, setSoundEnabled] = useState(() =>
+    typeof window.AudioContext !== "undefined" && localStorage.getItem("monopoly.sound-enabled") === "true",
+  );
   const [drawnCard, setDrawnCard] = useState("");
   const [celebration, setCelebration] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
   const boardSpaceRefs = useRef<Array<HTMLDivElement | null>>([]);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
@@ -587,15 +626,23 @@ function GameTable({
     return () => window.clearInterval(timer);
   }, []);
 
+  useEffect(() => () => {
+    if (audioContextRef.current) {
+      void audioContextRef.current.close().catch((audioError) => {
+        console.error("Could not close the game audio context:", audioError);
+      });
+    }
+  }, []);
+
   useEffect(() => {
     if (!followPlayerPiece || followedPosition === undefined) return;
     const boardSpace = boardSpaceRefs.current[followedPosition];
     if (!boardSpace) return;
     const frame = window.requestAnimationFrame(() =>
-      boardSpace.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }),
+      boardSpace.scrollIntoView({ behavior: motionEnabled ? "smooth" : "auto", block: "center", inline: "center" }),
     );
     return () => window.cancelAnimationFrame(frame);
-  }, [followPlayerPiece, followedPosition, isMyTurn]);
+  }, [followPlayerPiece, followedPosition, isMyTurn, motionEnabled]);
 
   useEffect(() => {
     const pauseFollowing = () => setFollowPlayerPiece(false);
@@ -617,8 +664,8 @@ function GameTable({
   useEffect(() => {
     if (tab !== "chat") return;
     const chatMessages = chatMessagesRef.current;
-    chatMessages?.scrollTo({ top: chatMessages.scrollHeight, behavior: "smooth" });
-  }, [game.chat.length, tab]);
+    chatMessages?.scrollTo({ top: chatMessages.scrollHeight, behavior: motionEnabled ? "smooth" : "auto" });
+  }, [game.chat.length, tab, motionEnabled]);
 
   useEffect(() => {
     const latestLog = game.log[0];
@@ -679,7 +726,8 @@ function GameTable({
     );
 
     for (const player of game.players) currentPositions[player.id] = player.position;
-    if (movedPlayers.length === 0) {
+    if (movedPlayers.length === 0 || !motionEnabled) {
+      if (!motionEnabled) setVisualPositions({});
       previousPositions.current = currentPositions;
       return;
     }
@@ -716,9 +764,87 @@ function GameTable({
     }
 
     previousPositions.current = currentPositions;
-  }, [game.players]);
+  }, [game.players, motionEnabled]);
 
   useEffect(() => () => movementTimers.current.forEach(window.clearTimeout), []);
+
+  function playTone(frequency: number) {
+    if (!soundEnabled) return;
+    const context = audioContextRef.current ?? new AudioContext();
+    audioContextRef.current = context;
+    void context.resume().then(() => {
+      const oscillator = context.createOscillator();
+      const volume = context.createGain();
+      oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+      volume.gain.setValueAtTime(0.0001, context.currentTime);
+      volume.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+      volume.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.18);
+      oscillator.connect(volume);
+      volume.connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.2);
+    }).catch((audioError) => {
+      console.error("Could not play the game sound:", audioError);
+    });
+  }
+
+  function onAction(action: GameAction, onComplete?: (response: { ok: boolean; error?: string }) => void) {
+    if (action.action === "roll" || action.action === "jail-roll") playTone(440);
+    else if (action.action === "buy" || action.action === "auction-bid") playTone(660);
+    else if (action.action === "trade-reply" && action.accept) playTone(880);
+    sendAction(action, onComplete);
+  }
+
+  function setMotionPreference(enabled: boolean) {
+    localStorage.setItem("monopoly.motion-enabled", String(enabled));
+    setMotionEnabled(enabled);
+  }
+
+  function setSoundPreference(enabled: boolean) {
+    localStorage.setItem("monopoly.sound-enabled", String(enabled));
+    setSoundEnabled(enabled);
+    if (enabled) {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      void context.resume().catch((audioError) => {
+        console.error("Could not enable game sounds:", audioError);
+      });
+    }
+  }
+
+  function openTradeComposer(offer?: GameState["trades"][number]) {
+    setTradeError("");
+    if (offer) {
+      setCounteringTradeId(offer.id);
+      setTradeTarget(offer.fromPlayerId);
+      setCashFrom(String(offer.cashTo));
+      setCashTo(String(offer.cashFrom));
+      setPropertiesFrom([...offer.propertiesTo]);
+      setPropertiesTo([...offer.propertiesFrom]);
+    } else {
+      setCounteringTradeId(null);
+      setTradeTarget("");
+      setCashFrom("0");
+      setCashTo("0");
+      setPropertiesFrom([]);
+      setPropertiesTo([]);
+    }
+    setTradeSearchFrom("");
+    setTradeSearchTo("");
+    setShowTradeDialog(true);
+  }
+
+  function showPropertyOnBoard(propertyId: string) {
+    const boardIndex = game.board.findIndex((space) => space.propertyId === propertyId);
+    setFollowPlayerPiece(false);
+    setSelectedPropertyId(propertyId);
+    setMobileView("board");
+    if (boardIndex < 0) return;
+    window.requestAnimationFrame(() => {
+      boardSpaceRefs.current[boardIndex]?.scrollIntoView({ behavior: motionEnabled ? "smooth" : "auto", block: "center", inline: "center" });
+    });
+  }
 
   function toggleSelection(list: string[], setList: (next: string[]) => void, id: string) {
     setList(list.includes(id) ? list.filter((value) => value !== id) : [...list, id]);
@@ -753,30 +879,36 @@ function GameTable({
 
   function submitTrade(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!tradeTarget || Number(cashFrom) > (me?.cash ?? 0)) return;
+    const target = game.players.find((player) => player.id === tradeTarget);
+    if (!target || !Number.isSafeInteger(Number(cashFrom)) || !Number.isSafeInteger(Number(cashTo)) ||
+        Number(cashFrom) < 0 || Number(cashTo) < 0 ||
+        Number(cashFrom) > (me?.cash ?? 0) || Number(cashTo) > target.cash) return;
     setTradeError("");
-    onAction({
-      action: "trade-offer",
-      trade: {
-        toPlayerId: tradeTarget,
+    const trade = {
         cashFrom: Number(cashFrom),
         cashTo: Number(cashTo),
         propertiesFrom,
         propertiesTo,
-      },
-    }, (response) => {
+    };
+    const onTradeSubmitted = (response: { ok: boolean; error?: string }) => {
       if (!response.ok) {
         setTradeError(response.error ?? "The trade could not be sent.");
         return;
       }
       setShowTradeDialog(false);
+      setCounteringTradeId(null);
       setPropertiesFrom([]);
       setPropertiesTo([]);
       setCashFrom("0");
       setCashTo("0");
       setTradeSearchFrom("");
       setTradeSearchTo("");
-    });
+    };
+    if (counteringTradeId) {
+      onAction({ action: "trade-counter", tradeId: counteringTradeId, trade }, onTradeSubmitted);
+    } else {
+      onAction({ action: "trade-offer", trade: { ...trade, toPlayerId: tradeTarget } }, onTradeSubmitted);
+    }
   }
 
   const rollAvailable = game.phase === "rolling" && isMyTurn && !game.debt;
@@ -784,7 +916,7 @@ function GameTable({
   const owedByMe = game.phase === "debt" && debtPlayer?.id === playerId;
 
   return (
-    <main className="table-page">
+    <main className={`table-page ${motionEnabled ? "motion-enabled" : "motion-disabled"}`}>
       <header className="table-topbar">
         <a className="brand" href="/" aria-label="Monopoly India home">
           <img className="brand-mark" src="/brand-mark.svg" alt="" />
@@ -800,6 +932,10 @@ function GameTable({
             {" · "}{game.rules.gameDurationMinutes ? `${game.rules.gameDurationMinutes} MIN` : "NO TIME LIMIT"}
           </span>
           <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
+          <div className="table-quick-tools">
+            <button className="quiet-button" onClick={() => setShowHelp(true)}>How to play</button>
+            <button className="quiet-button" onClick={() => setShowPreferences(true)}>Sound & motion</button>
+          </div>
         </div>
         <a
           className="feedback-link table-feedback-link"
@@ -811,7 +947,66 @@ function GameTable({
       </header>
 
       {celebration && <div className="milestone-celebration" role="status" aria-live="polite"><span>{celebration}</span></div>}
-      <div className="table-layout">
+      {showHelp && (
+        <div className="card-backdrop" onClick={() => setShowHelp(false)}>
+          <section aria-labelledby="help-heading" aria-modal="true" className="help-card" onClick={(event) => event.stopPropagation()} role="dialog">
+            <button aria-label="Close how to play" className="card-dismiss" onClick={() => setShowHelp(false)}>×</button>
+            <small>QUICK START</small>
+            <h2 id="help-heading">How to play</h2>
+            <ol>
+              <li><strong>Roll and move.</strong> Take turns rolling the dice and follow your token around the board.</li>
+              <li><strong>Build your city portfolio.</strong> Buy open properties, collect rent, and complete a color group to build houses and hotels.</li>
+              <li><strong>Manage your money.</strong> Mortgage properties or sell buildings if you need cash. Use the board or Properties list to inspect an address.</li>
+              <li><strong>Make a deal.</strong> Propose trades, counter an incoming offer, or withdraw an offer while it is pending. Offers expire after 90 seconds.</li>
+            </ol>
+            <p>Learning solo? Your host can add learning bots in the room settings before the game starts.</p>
+            <button className="action-button" onClick={() => setShowHelp(false)}>Got it</button>
+          </section>
+        </div>
+      )}
+      {showPreferences && (
+        <div className="card-backdrop" onClick={() => setShowPreferences(false)}>
+          <section aria-labelledby="preferences-heading" aria-modal="true" className="preferences-card" onClick={(event) => event.stopPropagation()} role="dialog">
+            <button aria-label="Close sound and motion settings" className="card-dismiss" onClick={() => setShowPreferences(false)}>×</button>
+            <small>YOUR TABLE, YOUR WAY</small>
+            <h2 id="preferences-heading">Sound & motion</h2>
+            <label className="preference-option">
+              <span><strong>Animations</strong><small>Dice, tokens, cards, and celebrations</small></span>
+              <input checked={motionEnabled} onChange={(event) => setMotionPreference(event.currentTarget.checked)} type="checkbox" />
+            </label>
+            <label className="preference-option">
+              <span><strong>Sound effects</strong><small>Soft cues for dice, purchases, and accepted trades</small></span>
+              <input checked={soundEnabled} disabled={typeof window.AudioContext === "undefined"} onChange={(event) => setSoundPreference(event.currentTarget.checked)} type="checkbox" />
+            </label>
+            {typeof window.AudioContext === "undefined" && <p className="preference-note">Sound effects are not supported by this browser.</p>}
+          </section>
+        </div>
+      )}
+      <nav aria-label="Game views" className="mobile-game-nav">
+        {([
+          ["board", "Board"],
+          ["players", "Players"],
+          ["trade", "Trade"],
+          ["chat", "Chat"],
+          ["log", "Log"],
+        ] as const).map(([view, label]) => (
+          <button
+            aria-pressed={mobileView === view}
+            className={mobileView === view ? "selected-mobile-view" : ""}
+            key={view}
+            onClick={() => {
+              setMobileView(view);
+              if (view === "players") setTab("properties");
+              if (view === "trade") setTab("trade");
+              if (view === "chat") setTab("chat");
+            }}
+          >
+            {label}
+            {view === "trade" && game.trades.some((trade) => trade.toPlayerId === playerId && trade.status === "pending") && <i aria-label="New offer" />}
+          </button>
+        ))}
+      </nav>
+      <div className="table-layout" data-mobile-view={mobileView}>
         <section className="board-column">
           <div className="turn-banner">
             <div>
@@ -940,10 +1135,10 @@ function GameTable({
               >
                 <button aria-label="Close trade proposal" className="card-dismiss" onClick={() => setShowTradeDialog(false)}>×</button>
                 <small>NEGOTIATE YOUR NEXT MOVE</small>
-                <h2 id="trade-dialog-heading">Propose a trade</h2>
+                <h2 id="trade-dialog-heading">{counteringTradeId ? "Make a counteroffer" : "Propose a trade"}</h2>
                 <form onSubmit={submitTrade}>
                   <label htmlFor="trade-target">Trade with</label>
-                  <select id="trade-target" value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
+                  <select disabled={Boolean(counteringTradeId)} id="trade-target" value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
                     <option value="">Choose a player</option>
                     {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
                   </select>
@@ -974,7 +1169,13 @@ function GameTable({
                     </div>
                   </div>
                   {tradeError && <p className="error-message" role="alert">{tradeError}</p>}
-                  <button className="action-button compact-action" disabled={!tradeTarget || game.phase === "finished" || Number(cashFrom) > (me?.cash ?? 0)} type="submit">Send trade proposal</button>
+                  <button
+                    className="action-button compact-action"
+                    disabled={!tradeTarget || game.phase === "finished" || !Number.isSafeInteger(Number(cashFrom)) || !Number.isSafeInteger(Number(cashTo)) || Number(cashFrom) > (me?.cash ?? 0) || Number(cashTo) > (game.players.find((player) => player.id === tradeTarget)?.cash ?? 0)}
+                    type="submit"
+                  >
+                    {counteringTradeId ? "Send counteroffer" : "Send trade proposal"}
+                  </button>
                 </form>
               </section>
             </div>
@@ -1105,15 +1306,16 @@ function GameTable({
                 <p><span>🏗️ Skyline builder</span><strong>{getLeaders(game.players, (player) => Object.values(game.properties).filter((property) => property.ownerId === player.id).reduce((total, property) => total + property.houses, 0))}</strong></p>
               </div>
               <button className="action-button recap-copy" onClick={() => void copyGameRecap()}>Copy match recap</button>
+              {isHost && <button className="action-button rematch-button" onClick={onRematch}>Play another game with this table</button>}
               {recapStatus && <p className="recap-status" role="status">{recapStatus}</p>}
             </section>
           )}
 
           <section className="detail-panel">
             <div className="detail-tabs">
-              <button className={tab === "properties" ? "selected-tab" : ""} onClick={() => setTab("properties")}>Properties</button>
-              <button className={tab === "trade" ? "selected-tab" : ""} onClick={() => setTab("trade")}>Trade</button>
-              <button className={tab === "chat" ? "selected-tab" : ""} onClick={() => setTab("chat")}>Chat{game.chat.length > 0 ? ` (${game.chat.length})` : ""}</button>
+              <button className={tab === "properties" ? "selected-tab" : ""} onClick={() => { setTab("properties"); setMobileView("players"); }}>Properties</button>
+              <button className={tab === "trade" ? "selected-tab" : ""} onClick={() => { setTab("trade"); setMobileView("trade"); }}>Trade</button>
+              <button className={tab === "chat" ? "selected-tab" : ""} onClick={() => { setTab("chat"); setMobileView("chat"); }}>Chat{game.chat.length > 0 ? ` (${game.chat.length})` : ""}</button>
             </div>
             {tab === "properties" && (
               <div className="property-list">
@@ -1123,13 +1325,19 @@ function GameTable({
                   const property = game.properties[id];
                   if (!property) return null;
                   return (
-                    <div className={`owned-property ${property.mortgaged ? "mortgaged-property" : ""}`} key={id}>
+                    <button
+                      aria-label={`Show ${property.name} on the board${property.mortgaged ? ", mortgaged" : ""}`}
+                      className={`owned-property ${property.mortgaged ? "mortgaged-property" : ""}`}
+                      key={id}
+                      onClick={() => showPropertyOnBoard(id)}
+                      type="button"
+                    >
                       <span className={`owned-color color-${property.group}`} />
                       <div className="owned-info">
                         <strong>{property.name}</strong>
                         <small>{property.mortgaged ? "Mortgaged" : property.houses === 5 ? "Hotel" : property.houses ? `${property.houses} house${property.houses > 1 ? "s" : ""}` : `Rent ${formatMoney(property.rent[0])}`}</small>
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
@@ -1139,15 +1347,26 @@ function GameTable({
                 <button className="action-button compact-action" disabled={game.phase === "finished" || game.players.filter((player) => player.id !== playerId && !player.bankrupt).length === 0} onClick={() => { setTradeError(""); setShowTradeDialog(true); }}>Propose a trade</button>
                 <div className="trade-offers">
                   <strong>Trade offers</strong>
-                  {game.trades.slice(0, 5).map((trade) => {
+                  {game.trades.slice(0, 10).map((trade) => {
                     const from = game.players.find((player) => player.id === trade.fromPlayerId);
                     const to = game.players.find((player) => player.id === trade.toPlayerId);
                     const incoming = trade.toPlayerId === playerId && trade.status === "pending";
                     const outgoing = trade.fromPlayerId === playerId && trade.status === "pending";
+                    const statusLabel = trade.status === "pending"
+                      ? `Pending · ${Math.max(0, Math.ceil((trade.expiresAt - now) / 1000))}s`
+                      : trade.status === "countered" ? "Countered" : trade.status[0].toUpperCase() + trade.status.slice(1);
                     return (
                       <div className="trade-offer" key={trade.id}>
                         <span>{from?.name} → {to?.name}<small>{formatMoney(trade.cashFrom)} + {trade.propertiesFrom.length} propert{trade.propertiesFrom.length === 1 ? "y" : "ies"} ↔ {formatMoney(trade.cashTo)} + {trade.propertiesTo.length} propert{trade.propertiesTo.length === 1 ? "y" : "ies"}</small></span>
-                        {incoming ? <span className="offer-actions"><button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: true })}>Accept</button><button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: false })}>Reject</button></span> : <small>{outgoing ? "Pending" : trade.status}</small>}
+                        {incoming ? (
+                          <span className="offer-actions">
+                            <button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: true })}>Accept</button>
+                            <button onClick={() => onAction({ action: "trade-reply", tradeId: trade.id, accept: false })}>Reject</button>
+                            <button onClick={() => openTradeComposer(trade)}>Counter</button>
+                          </span>
+                        ) : outgoing ? (
+                          <span className="offer-actions"><small>{statusLabel}</small><button onClick={() => onAction({ action: "trade-cancel", tradeId: trade.id })}>Withdraw</button></span>
+                        ) : <small>{statusLabel}</small>}
                       </div>
                     );
                   })}
@@ -1186,9 +1405,35 @@ function GameTable({
           </section>
 
           <section className="log-panel">
-            <div className="panel-heading"><h3>Table talk</h3><span>LIVE</span></div>
+            <div className="panel-heading"><h3>Table talk</h3><span>LAST {game.log.length} EVENTS</span></div>
+            <div aria-label="Filter table events" className="log-filters">
+              {([
+                ["all", "All"],
+                ["deals", "Deals"],
+                ["property", "Properties"],
+                ["money", "Money"],
+                ["events", "Events"],
+              ] as const).map(([filter, label]) => (
+                <button
+                  aria-pressed={logFilter === filter}
+                  className={logFilter === filter ? "selected-log-filter" : ""}
+                  key={filter}
+                  onClick={() => setLogFilter(filter)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="log-list">
-              {game.log.slice(0, 8).map((entry) => <p key={entry.id}>{entry.text}</p>)}
+              {game.log
+                .filter((entry) => logFilter === "all" || getLogCategory(entry.text) === logFilter)
+                .map((entry) => (
+                  <p className={`log-entry log-${getLogCategory(entry.text)}`} key={entry.id}>
+                    <small>{getLogCategory(entry.text)}</small>
+                    <span>{entry.text}</span>
+                  </p>
+                ))}
+              {!game.log.some((entry) => logFilter === "all" || getLogCategory(entry.text) === logFilter) && <p className="empty-note">No {logFilter} events yet.</p>}
             </div>
           </section>
         </aside>
