@@ -142,7 +142,7 @@ footer b { color: #c8793b; }
 .dice-result span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #e9e3d4; border-radius: 6px; background: white; }
 .dice-result b { color: #aaa495; font-size: 13px; }
 .game-error { margin: 0 0 12px; padding: 10px 13px; border: 1px solid #efc7b7; border-radius: 6px; background: #fff1eb; color: #a44936; font-size: 12px; }
-.board-wrap { position: relative; width: min(100%, 1120px); aspect-ratio: 1; flex: 0 1 auto; min-height: 0; margin: 0 auto; padding: 10px; border: 1px solid rgba(44, 64, 47, .2); border-radius: 7px; background: #e4eddf; box-shadow: 0 10px 32px rgba(48, 62, 43, .09); }
+.board-wrap { position: relative; width: min(100%, 1120px); aspect-ratio: 1; flex: 0 0 auto; min-height: 0; margin: 0 auto; padding: 10px; border: 1px solid rgba(44, 64, 47, .2); border-radius: 7px; background: #e4eddf; box-shadow: 0 10px 32px rgba(48, 62, 43, .09); }
 .board-grid { display: grid; width: 100%; height: 100%; grid-template-columns: repeat(11, minmax(0, 1fr)); grid-template-rows: repeat(11, minmax(0, 1fr)); overflow: hidden; position: relative; border: 1px solid #9da994; background: #e4eddf; }
 .board-center { grid-column: 2 / 11; grid-row: 2 / 11; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; text-align: center; }
 .board-ornament { margin: 0 0 11px; color: #bd7135; font-family: "Playfair Display", Georgia, serif; font-size: clamp(9px, 1.3vw, 17px); }
