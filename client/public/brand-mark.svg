@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Monopoly India">
+  <circle cx="32" cy="32" r="31" fill="#31553b"/>
+  <circle cx="32" cy="32" r="28.5" fill="none" stroke="#d3914d" stroke-width="2"/>
+  <path d="m32 13 3.2 3.4 4.8-.5 1.5 4.6 4.6 1.5-.5 4.8L49 30l-3.4 3.2.5 4.8-4.6 1.5-1.5 4.6-4.8-.5L32 47l-3.2-3.4-4.8.5-1.5-4.6-4.6-1.5.5-4.8L15 30l3.4-3.2-.5-4.8 4.6-1.5 1.5-4.6 4.8.5z" fill="#416b4b" opacity=".8"/>
+  <path d="M17 31 32 19l15 12v19h-9V39a6 6 0 0 0-12 0v11h-9z" fill="#fff6e6"/>
+  <path d="M28 50V39a4 4 0 0 1 8 0v11" fill="#31553b"/>
+  <text x="32" y="46" fill="#e2a552" font-family="Georgia,serif" font-size="12" font-weight="700" text-anchor="middle">₹</text>
+  <circle cx="32" cy="13" r="1.5" fill="#f3cb81"/>
+</svg>

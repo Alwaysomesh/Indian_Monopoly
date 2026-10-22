@@ -412,6 +412,9 @@ export default function App() {
       <footer>
         <span>GOOD TIMES. GREAT REAL ESTATE.</span>
         <span>MADE FOR YOUR CREW <b>✦</b></span>
+        <a className="feedback-link" href="mailto:yagaofficial02@gmail.com?subject=Monopoly%20India%20feedback">
+          Bugs or ideas? <strong>Email us</strong>
+        </a>
       </footer>
     </main>
   );
@@ -576,7 +579,8 @@ function GameTable({
     <main className="table-page">
       <header className="table-topbar">
         <a className="brand" href="/" aria-label="Monopoly India home">
-          <span className="brand-mark">M</span><span>MONOPOLY <strong>INDIA</strong></span>
+          <img className="brand-mark" src="/brand-mark.svg" alt="" />
+          <span>MONOPOLY <strong>INDIA</strong></span>
         </a>
         <div className="table-title">
           <span className="room-chip">ROOM {game.roomCode}</span>
@@ -587,6 +591,12 @@ function GameTable({
           </span>
           <span className={`connection ${connected ? "online" : ""}`}><i />{connected ? "Live game" : "Reconnecting…"}</span>
         </div>
+        <a
+          className="feedback-link table-feedback-link"
+          href="mailto:yagaofficial02@gmail.com?subject=Monopoly%20India%20feedback"
+        >
+          Feedback
+        </a>
         <button className="quiet-button" onClick={onLeave}>Leave table</button>
       </header>
 
