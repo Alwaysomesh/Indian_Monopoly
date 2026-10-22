@@ -126,13 +126,13 @@ footer b { color: #c8793b; }
   footer { flex-direction: column; gap: 7px; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); }
 }
 
-.table-page { display: flex; height: 100vh; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; padding: 0 3.5% 12px; background: #f6f1e7; }
+.table-page { display: flex; min-height: 100vh; min-height: 100dvh; flex-direction: column; overflow-x: hidden; overflow-y: auto; padding: 0 3.5% 12px; background: #f6f1e7; }
 .table-topbar { height: 70px; flex: 0 0 70px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(38, 49, 39, .12); }
 .table-title { display: flex; align-items: center; gap: 18px; }
 .room-chip { padding: 7px 10px; border-radius: 4px; background: #eee9dc; color: #6e6a5e; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
 .quiet-button { border: 0; background: transparent; color: #7c786d; font-size: 11px; }
 .quiet-button:hover { color: #a64838; }
-.table-layout { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; width: 100%; max-width: 1540px; overflow: hidden; margin: 12px auto 0; align-items: stretch; }
+.table-layout { display: grid; flex: 0 0 auto; min-height: 0; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; width: 100%; max-width: 1540px; overflow: visible; margin: 12px auto 0; align-items: start; }
 .board-column { display: flex; min-width: 0; min-height: 0; flex-direction: column; align-items: center; }
 .turn-banner { display: flex; justify-content: space-between; align-items: center; margin-bottom: 13px; padding: 13px 17px; border: 1px solid rgba(45, 68, 50, .12); border-radius: 8px; background: #fffdf7; box-shadow: 0 4px 16px rgba(45, 48, 32, .04); }
 .turn-banner > div:first-child { display: grid; gap: 4px; }
@@ -142,7 +142,7 @@ footer b { color: #c8793b; }
 .dice-result span { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid #e9e3d4; border-radius: 6px; background: white; }
 .dice-result b { color: #aaa495; font-size: 13px; }
 .game-error { margin: 0 0 12px; padding: 10px 13px; border: 1px solid #efc7b7; border-radius: 6px; background: #fff1eb; color: #a44936; font-size: 12px; }
-.board-wrap { position: relative; width: min(100%, 1040px, calc(100dvh - 240px)); aspect-ratio: 1; flex: 0 1 auto; min-height: 0; margin: 0 auto; padding: 10px; border: 1px solid rgba(44, 64, 47, .2); border-radius: 7px; background: #e4eddf; box-shadow: 0 10px 32px rgba(48, 62, 43, .09); }
+.board-wrap { position: relative; width: min(100%, 1120px); aspect-ratio: 1; flex: 0 0 auto; min-height: 0; margin: 0 auto; padding: 10px; border: 1px solid rgba(44, 64, 47, .2); border-radius: 7px; background: #e4eddf; box-shadow: 0 10px 32px rgba(48, 62, 43, .09); }
 .board-grid { display: grid; width: 100%; height: 100%; grid-template-columns: repeat(11, minmax(0, 1fr)); grid-template-rows: repeat(11, minmax(0, 1fr)); overflow: hidden; position: relative; border: 1px solid #9da994; background: #e4eddf; }
 .board-center { grid-column: 2 / 11; grid-row: 2 / 11; display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 0; text-align: center; }
 .board-ornament { margin: 0 0 11px; color: #bd7135; font-family: "Playfair Display", Georgia, serif; font-size: clamp(9px, 1.3vw, 17px); }
@@ -180,7 +180,7 @@ footer b { color: #c8793b; }
 .player-card > b { margin-left: auto; color: #364c39; font-size: 10px; white-space: nowrap; }
 .cash-counter { position: relative; animation: money-flash .55s ease-out both; }
 .cash-counter::after { position: absolute; top: -5px; left: 50%; color: #ca873d; content: "₹"; font-size: 10px; opacity: 0; animation: coin-fly .55s ease-out both; }
-.game-sidebar { display: grid; min-height: 0; overflow-y: auto; align-content: start; gap: 12px; padding: 0 3px 8px 0; }
+.game-sidebar { display: grid; min-height: 0; max-height: calc(100dvh - 90px); overflow-x: hidden; overflow-y: auto; align-content: start; gap: 12px; padding: 0 3px 8px 0; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .action-panel, .players-panel, .recap-panel, .detail-panel, .log-panel { overflow: hidden; border: 1px solid rgba(58, 67, 52, .1); border-radius: 8px; background: #fffdf7; box-shadow: 0 5px 18px rgba(58, 49, 31, .04); }
 .action-panel { padding: 15px; }
 .panel-kicker { margin: 0 0 10px; }
@@ -219,7 +219,8 @@ footer b { color: #c8793b; }
 .recap-awards strong { color: #394c3c; text-align: right; }
 .recap-copy { min-height: 33px; padding: 7px; font-size: 9px; }
 .recap-status { margin: 7px 0 0; color: #63815d; font-size: 9px; line-height: 1.4; }
-.detail-tabs { display: grid; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid #ece9e0; }
+.detail-panel { display: flex; min-height: 0; flex-direction: column; }
+.detail-tabs { display: grid; flex: 0 0 auto; grid-template-columns: repeat(3,1fr); border-bottom: 1px solid #ece9e0; }
 .detail-tabs button { padding: 10px 3px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #858274; font-size: 10px; }
 .detail-tabs button.selected-tab { border-bottom-color: #c8793b; color: #324a38; font-weight: 700; }
 .property-list { max-height: 360px; overflow-y: auto; padding: 7px 12px; }
@@ -232,7 +233,7 @@ footer b { color: #c8793b; }
 .property-controls button, .offer-actions button { padding: 5px 7px; border: 1px solid #e3e1d6; border-radius: 4px; background: #f8f5ed; color: #52634f; font-size: 8px; }
 .property-controls button:disabled { opacity: .4; }
 .empty-note { margin: 0; padding: 15px 4px; color: #959285; font-size: 10px; line-height: 1.5; }
-.trade-panel { max-height: 480px; overflow-y: auto; padding: 12px; }
+.trade-panel { max-height: min(60dvh, 640px); min-height: 0; flex: 0 1 auto; overflow-x: hidden; overflow-y: auto; padding: 12px; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .trade-panel form { display: grid; gap: 7px; }
 .trade-panel label { margin: 3px 0 0; color: #6d6b5f; font-size: 9px; }
 .trade-panel input:not([type="checkbox"]), .trade-panel select { width: 100%; height: 32px; padding: 0 8px; border: 1px solid #e5e1d6; border-radius: 4px; background: white; font-size: 10px; }
@@ -247,8 +248,8 @@ footer b { color: #c8793b; }
 .trade-offer > span:first-child { display: grid; gap: 4px; }
 .trade-offer small { color: #8c897c; font-size: 8px; }
 .offer-actions { display: flex; flex: 0 0 auto; gap: 4px; }
-.chat-panel { display: flex; height: 300px; flex-direction: column; padding: 10px; }
-.chat-messages { flex: 1; overflow: auto; }
+.chat-panel { display: flex; height: 300px; min-height: 0; flex-direction: column; padding: 10px; }
+.chat-messages { min-height: 0; flex: 1 1 auto; overflow-x: hidden; overflow-y: auto; overscroll-behavior-y: contain; scrollbar-gutter: stable; }
 .chat-message { margin: 0 0 9px; padding: 8px; border-radius: 6px; background: #f4f1e8; }
 .chat-message.my-message { background: #e9f0e5; }
 .chat-message strong { color: #496249; font-size: 9px; }
@@ -292,7 +293,7 @@ footer b { color: #c8793b; }
   .table-layout { display: grid; height: auto; min-height: 0; grid-template-columns: 1fr; max-width: 680px; overflow: visible; margin: 11px auto 0; }
   .board-column { display: block; min-height: 0; }
   .board-wrap { width: min(100%, 630px, calc(100vw - 24px)); flex: none; }
-  .game-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; align-items: start; padding-right: 0; }
+  .game-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; align-items: start; padding-right: 0; }
   .detail-panel { grid-row: span 2; }
   .log-panel { grid-column: 1; }
   .player-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -341,11 +342,11 @@ footer b { color: #c8793b; }
 }
 
 @media (orientation: landscape) and (max-height: 600px) and (min-width: 761px) {
-  .table-page { display: block; height: auto; min-height: 100dvh; overflow: visible; padding-bottom: 20px; }
+  .table-page { display: block; min-height: 100dvh; overflow: visible; padding-bottom: 20px; }
   .table-layout { height: auto; min-height: 0; grid-template-columns: 1fr; overflow: visible; }
   .board-column { display: block; }
-  .board-wrap { width: min(90vh, 630px, calc(100vw - 30px)); }
-  .game-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; }
+  .board-wrap { width: min(100%, 1120px, calc(100vw - 30px)); }
+  .game-sidebar { grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: none; overflow: visible; }
 }
 
 @media (prefers-reduced-motion: reduce) {

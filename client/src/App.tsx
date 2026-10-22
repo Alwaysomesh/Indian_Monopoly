@@ -452,14 +452,16 @@ function GameTable({
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [drawnCard, setDrawnCard] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
-  const chatEndRef = useRef<HTMLDivElement>(null);
+  const chatMessagesRef = useRef<HTMLDivElement>(null);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
   const [visualPositions, setVisualPositions] = useState<Record<string, number>>({});
   const latestLogId = game.log[0]?.id;
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (tab !== "chat") return;
+    const chatMessages = chatMessagesRef.current;
+    chatMessages?.scrollTo({ top: chatMessages.scrollHeight, behavior: "smooth" });
   }, [game.chat.length, tab]);
 
   useEffect(() => {
@@ -877,14 +879,14 @@ function GameTable({
             )}
             {tab === "chat" && (
               <div className="chat-panel">
-                <div className="chat-messages">
+                <div className="chat-messages" ref={chatMessagesRef}>
                   {game.chat.map((message) => (
                     <div className={`chat-message ${message.playerId === playerId ? "my-message" : ""} ${["🎉", "😂", "👀", "🏏", "☕"].includes(message.text) ? "chat-reaction" : ""}`} key={message.id}>
                       <strong>{message.playerName}</strong><p>{message.text}</p>
                     </div>
                   ))}
                   {!game.chat.length && <p className="empty-note">The chai is hot. Start the banter!</p>}
-                  <div ref={chatEndRef} />
+                  
                 </div>
                 <div className="quick-reactions" aria-label="Quick reactions">
                   {[
