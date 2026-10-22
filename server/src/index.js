@@ -21,7 +21,7 @@ const ROLL_DEADLINE_MS = 30_000;
 const ACTION_DEADLINE_MS = 45_000;
 const DEADLINE_ACTIONS = new Set([
   "roll", "jail-roll", "jail-pay", "buy", "pass", "auction", "auction-bid",
-  "auction-pass", "end-turn", "mortgage", "unmortgage", "build",
+  "auction-pass", "end-turn", "mortgage", "unmortgage", "build", "trade-reply",
   "sell-house", "declare-bankrupt",
 ]);
 const rooms = new Map();
@@ -63,9 +63,9 @@ function publicRoom(room) {
 }
 
 function broadcastRoom(room) {
+  scheduleOfflineAction(room);
   io.to(room.code).emit("room:update", publicRoom(room));
   if (room.game) io.to(room.code).emit("game:update", publicGame(room.game));
-  scheduleOfflineAction(room);
 }
 
 function pendingActionPlayerId(game) {
