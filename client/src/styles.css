@@ -173,7 +173,7 @@ footer b { color: #c8793b; }
 .player-card-info small, .player-row-name small { color: #929083; font-size: 9px; }
 .player-card > b { margin-left: auto; color: #364c39; font-size: 10px; white-space: nowrap; }
 .cash-counter { position: relative; animation: money-flash .55s ease-out both; }
-.cash-counter::after { position: absolute; top: -5px; left: 50%; color: #ca873d; content: "â‚¹"; font-size: 10px; opacity: 0; animation: coin-fly .55s ease-out both; }
+.cash-counter::after { position: absolute; top: -5px; left: 50%; color: #ca873d; content: "₹"; font-size: 10px; opacity: 0; animation: coin-fly .55s ease-out both; }
 .game-sidebar { display: grid; min-height: 0; overflow-y: auto; align-content: start; gap: 12px; padding: 0 3px 8px 0; }
 .action-panel, .players-panel, .recap-panel, .detail-panel, .log-panel { overflow: hidden; border: 1px solid rgba(58, 67, 52, .1); border-radius: 8px; background: #fffdf7; box-shadow: 0 5px 18px rgba(58, 49, 31, .04); }
 .action-panel { padding: 15px; }
