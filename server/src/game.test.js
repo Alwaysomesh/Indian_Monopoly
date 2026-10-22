@@ -75,7 +75,7 @@ test("season events start every fourth completed table round and never repeat", 
   const finishCurrentTurn = () => {
     const player = game.players[game.currentPlayerIndex];
     game.phase = "end-turn";
-    performGameAction(game, player.id, { action: "end-turn" });
+    withRandom(0, () => performGameAction(game, player.id, { action: "end-turn" }));
   };
 
   finishCurrentTurn();
