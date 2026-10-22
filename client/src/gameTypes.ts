@@ -40,6 +40,7 @@ export interface Player {
   jailTurns: number;
   bankrupt: boolean;
   connected: boolean;
+  botControlled: boolean;
 }
 
 export interface TradeOffer {
@@ -67,10 +68,18 @@ export interface GameLogEntry {
   createdAt: number;
 }
 
+export interface SeasonEvent {
+  id: "railway-rush" | "construction-boom" | "rent-relief" | "festival-bonus";
+  title: string;
+  description: string;
+}
+
 export interface GameState {
   roomCode: string;
   ruleSet: PublicRoom["ruleSet"];
   rules: GameRules;
+  seasonEvent: SeasonEvent | null;
+  deadlineAt: number | null;
   board: BoardSpace[];
   properties: Record<string, Property>;
   players: Player[];
@@ -107,6 +116,7 @@ export interface GameRules {
   goSalary: number;
   rentMultiplier: number;
   auctionsEnabled: boolean;
+  seasonsEnabled: boolean;
 }
 
 export interface RoomResponse {
@@ -117,7 +127,7 @@ export interface RoomResponse {
 }
 
 export type GameAction =
-  | { action: "roll" | "jail-roll" | "jail-pay" | "buy" | "pass" | "end-turn" | "declare-bankrupt" }
+  | { action: "roll" | "jail-roll" | "jail-pay" | "buy" | "pass" | "auction" | "end-turn" | "declare-bankrupt" }
   | { action: "mortgage" | "unmortgage" | "build" | "sell-house"; propertyId: string }
   | { action: "auction-bid"; amount: number }
   | { action: "auction-pass" }
