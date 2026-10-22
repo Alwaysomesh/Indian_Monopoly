@@ -95,16 +95,16 @@ test("host rule settings override preset starting cash and can disable auctions"
 test("invalid custom starting cash settings are rejected", () => {
   assert.throws(
     () => createGame("TEST01", lobby, "classic", { startingCash: 499, auctionsEnabled: true }),
-    /between â‚¹500 and â‚¹5,000/,
+    /between ₹500 and ₹5,000/,
   );
 });
 
-test("advance-to-GO cards retain their printed â‚¹200 reward in quick mode", () => {
+test("advance-to-GO cards retain their printed ₹200 reward in quick mode", () => {
   const game = createGame("TEST01", lobby, "quick");
   for (const property of Object.values(game.properties)) property.ownerId = "player-one";
   game.players[0].position = 38;
   game.chestDeck[0] = {
-    text: "Advance to GO. Collect â‚¹200.",
+    text: "Advance to GO. Collect ₹200.",
     action: "move",
     target: 0,
     collectGo: true,
