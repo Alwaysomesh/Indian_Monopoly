@@ -66,13 +66,41 @@ test("quick and chaos presets apply their starting cash and rent multipliers", (
   }
 });
 
-test("optional random seasons modify railway rent, construction cost, and festival payouts", () => {
-  const standard = createGame("TEST01", lobby);
-  assert.equal(standard.seasonEvent, null);
+test("season events start every fourth completed table round and never repeat", () => {
+  let game;
+  withRandom(0, () => { game = createGame("TEST01", lobby, "classic", { seasonsEnabled: true }); });
+  assert.equal(game.roundNumber, 1);
+  assert.equal(game.seasonEvent, null);
 
-  let railwayRush;
-  withRandom(0, () => { railwayRush = createGame("TEST01", lobby, "classic", { seasonsEnabled: true }); });
-  assert.equal(railwayRush.seasonEvent.id, "railway-rush");
+  const finishCurrentTurn = () => {
+    const player = game.players[game.currentPlayerIndex];
+    game.phase = "end-turn";
+    performGameAction(game, player.id, { action: "end-turn" });
+  };
+
+  finishCurrentTurn();
+  assert.equal(game.roundNumber, 1);
+  assert.equal(game.seasonEvent, null);
+  finishCurrentTurn();
+  assert.equal(game.roundNumber, 2);
+  assert.equal(game.seasonEvent, null);
+  finishCurrentTurn();
+  finishCurrentTurn();
+  assert.equal(game.roundNumber, 3);
+  assert.equal(game.seasonEvent, null);
+  finishCurrentTurn();
+  finishCurrentTurn();
+  assert.equal(game.roundNumber, 4);
+  assert.equal(game.seasonEvent.id, "railway-rush");
+  const firstSpecialSeasonId = game.seasonEvent.id;
+
+  while (game.roundNumber < 8) finishCurrentTurn();
+  assert.equal(game.seasonEvent.id === firstSpecialSeasonId, false);
+});
+
+test("special seasons apply their rent, construction, and festival effects", () => {
+  const railwayRush = createGame("TEST01", lobby, "classic", { seasonsEnabled: true });
+  railwayRush.seasonEvent = { id: "railway-rush", title: "Railway Rush", description: "Railway rent is doubled." };
   railwayRush.currentPlayerIndex = 1;
   railwayRush.players[1].position = 37;
   railwayRush.properties["central-railway"].ownerId = "player-one";
@@ -80,18 +108,16 @@ test("optional random seasons modify railway rent, construction cost, and festiv
   assert.equal(railwayRush.players[1].cash, 1650);
   assert.equal(railwayRush.players[0].cash, 1550);
 
-  let constructionBoom;
-  withRandom(0.25, () => { constructionBoom = createGame("TEST01", lobby, "classic", { seasonsEnabled: true }); });
-  assert.equal(constructionBoom.seasonEvent.id, "construction-boom");
+  const constructionBoom = createGame("TEST01", lobby, "classic", { seasonsEnabled: true });
+  constructionBoom.seasonEvent = { id: "construction-boom", title: "Construction Boom", description: "Construction costs are doubled." };
   constructionBoom.properties.dharavi.ownerId = "player-one";
   constructionBoom.properties["mumbai-market"].ownerId = "player-one";
   performGameAction(constructionBoom, "player-one", { action: "build", propertyId: "dharavi" });
   assert.equal(constructionBoom.players[0].cash, 1400);
   assert.equal(constructionBoom.properties.dharavi.houses, 1);
 
-  let rentRelief;
-  withRandom(0.55, () => { rentRelief = createGame("TEST01", lobby, "classic", { seasonsEnabled: true }); });
-  assert.equal(rentRelief.seasonEvent.id, "rent-relief");
+  const rentRelief = createGame("TEST01", lobby, "classic", { seasonsEnabled: true });
+  rentRelief.seasonEvent = { id: "rent-relief", title: "Rent Relief", description: "Rent is halved." };
   rentRelief.currentPlayerIndex = 1;
   rentRelief.players[1].position = 2;
   rentRelief.properties["marine-drive"].ownerId = "player-one";
@@ -99,12 +125,14 @@ test("optional random seasons modify railway rent, construction cost, and festiv
   assert.equal(rentRelief.players[1].cash, 1496);
   assert.equal(rentRelief.players[0].cash, 1504);
 
-  let festival;
-  withRandom(0.8, () => { festival = createGame("TEST01", lobby, "classic", { seasonsEnabled: true }); });
+  const festival = createGame("TEST01", lobby, "classic", { seasonsEnabled: true });
+  festival.roundNumber = 3;
+  festival.currentPlayerIndex = 1;
+  festival.phase = "end-turn";
+  withRandom(0.999, () => performGameAction(festival, "player-two", { action: "end-turn" }));
   assert.equal(festival.seasonEvent.id, "festival-bonus");
   assert.deepEqual(festival.players.map((player) => player.cash), [1700, 1700]);
 });
-
 test("quick preset pays its configured salary when passing GO", () => {
   const game = createGame("TEST01", lobby, "quick");
   for (const property of Object.values(game.properties)) property.ownerId = "player-one";
