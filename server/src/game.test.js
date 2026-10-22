@@ -297,6 +297,37 @@ test("landing on another player's city charges the listed rent", () => {
   assert.equal(game.phase, "rolling");
 });
 
+test("utility rent is four times the dice roll when the owner has one company", () => {
+  const game = createGame("TEST01", lobby);
+  const renter = game.players[1];
+  game.currentPlayerIndex = 1;
+  renter.position = 8;
+  game.properties["power-grid"].ownerId = "player-one";
+
+  withRandom(0.2, () => performGameAction(game, renter.id, { action: "roll" }));
+
+  assert.deepEqual(game.dice, [2, 2]);
+  assert.equal(renter.position, 12);
+  assert.equal(renter.cash, 1500 - 4 * 4);
+  assert.equal(game.players[0].cash, 1500 + 4 * 4);
+});
+
+test("utility rent is ten times the dice roll when one player owns both companies", () => {
+  const game = createGame("TEST01", lobby);
+  const renter = game.players[1];
+  game.currentPlayerIndex = 1;
+  renter.position = 8;
+  game.properties["power-grid"].ownerId = "player-one";
+  game.properties["water-works"].ownerId = "player-one";
+
+  withRandom(0.2, () => performGameAction(game, renter.id, { action: "roll" }));
+
+  assert.deepEqual(game.dice, [2, 2]);
+  assert.equal(renter.position, 12);
+  assert.equal(renter.cash, 1500 - 4 * 10);
+  assert.equal(game.players[0].cash, 1500 + 4 * 10);
+});
+
 test("a third-party debtor can mortgage assets and resume the current player's turn", () => {
   const game = createGame("TEST01", lobby);
   const debtor = game.players[1];
