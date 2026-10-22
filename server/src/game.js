@@ -1,6 +1,14 @@
 import { randomBytes } from "node:crypto";
 
-export const MIN_PLAYERS = 2; export const MAX_PLAYERS = 10;  export const BOARD = [
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 10;
+export const RULE_PRESETS = {
+  classic: { startingCash: 1500, goSalary: 200, rentMultiplier: 1, auctionsEnabled: true },
+  quick: { startingCash: 1200, goSalary: 300, rentMultiplier: 2, auctionsEnabled: true },
+  chaos: { startingCash: 1000, goSalary: 400, rentMultiplier: 3, auctionsEnabled: true },
+};
+
+export const BOARD = [
   { id: "go", type: "corner", label: "GO" },
   { id: "dharavi", type: "property", propertyId: "dharavi" },
   { id: "chest-1", type: "communityChest", label: "Community Chest" },
@@ -81,44 +89,44 @@ const utilityData = [
 ];
 
 const CHANCE_CARDS = [
-  { text: "Advance to GO. Collect ₹200.", action: "move", target: 0, collectGo: true },
-  { text: "Caught without a helmet by traffic police. Pay ₹500.", action: "pay", amount: 500 },
-  { text: "Your startup funding came through. Collect ₹1,500.", action: "collect", amount: 1500 },
+  { text: "Advance to GO. Collect â‚¹200.", action: "move", target: 0, collectGo: true },
+  { text: "Caught without a helmet by traffic police. Pay â‚¹500.", action: "pay", amount: 500 },
+  { text: "Your startup funding came through. Collect â‚¹1,500.", action: "collect", amount: 1500 },
   { text: "Go directly to Jail. Do not pass GO.", action: "jail" },
   { text: "Take a trip to the Taj Mahal.", action: "move", target: 27 },
   { text: "Ride the railway to the nearest station.", action: "railroad" },
-  { text: "Your electricity bill arrived. Pay ₹150.", action: "pay", amount: 150 },
-  { text: "Wedding season! Collect ₹500 from every player.", action: "collectEach", amount: 500 },
-  { text: "Pay ₹250 to every player for your big birthday party.", action: "payEach", amount: 250 },
+  { text: "Your electricity bill arrived. Pay â‚¹150.", action: "pay", amount: 150 },
+  { text: "Wedding season! Collect â‚¹500 from every player.", action: "collectEach", amount: 500 },
+  { text: "Pay â‚¹250 to every player for your big birthday party.", action: "payEach", amount: 250 },
   { text: "Move forward three spaces.", action: "moveSteps", amount: 3 },
   { text: "Take a shortcut back three spaces.", action: "moveSteps", amount: -3 },
-  { text: "Your mutual funds paid dividends. Collect ₹500.", action: "collect", amount: 500 },
-  { text: "Your Diwali bonus arrived. Collect ₹100.", action: "collect", amount: 100 },
-  { text: "Pay ₹150 in wedding-season road tolls.", action: "pay", amount: 150 },
-  { text: "Your company reimbursed a business trip. Collect ₹250.", action: "collect", amount: 250 },
-  { text: "Pay ₹25 per house and ₹100 per hotel for repairs.", action: "repairs", house: 25, hotel: 100 },
+  { text: "Your mutual funds paid dividends. Collect â‚¹500.", action: "collect", amount: 500 },
+  { text: "Your Diwali bonus arrived. Collect â‚¹100.", action: "collect", amount: 100 },
+  { text: "Pay â‚¹150 in wedding-season road tolls.", action: "pay", amount: 150 },
+  { text: "Your company reimbursed a business trip. Collect â‚¹250.", action: "collect", amount: 250 },
+  { text: "Pay â‚¹25 per house and â‚¹100 per hotel for repairs.", action: "repairs", house: 25, hotel: 100 },
 ];
 
 const CHEST_CARDS = [
-  { text: "Won the local Diwali Tambola. Collect ₹2,000.", action: "collect", amount: 2000 },
-  { text: "Your fixed deposit matured. Collect ₹1,000.", action: "collect", amount: 1000 },
-  { text: "Pay your annual school fees of ₹500.", action: "pay", amount: 500 },
-  { text: "Your health insurance paid out. Collect ₹1,000.", action: "collect", amount: 1000 },
+  { text: "Won the local Diwali Tambola. Collect â‚¹2,000.", action: "collect", amount: 2000 },
+  { text: "Your fixed deposit matured. Collect â‚¹1,000.", action: "collect", amount: 1000 },
+  { text: "Pay your annual school fees of â‚¹500.", action: "pay", amount: 500 },
+  { text: "Your health insurance paid out. Collect â‚¹1,000.", action: "collect", amount: 1000 },
   { text: "Go directly to Jail. Do not pass GO.", action: "jail" },
-  { text: "Advance to GO. Collect ₹200.", action: "move", target: 0, collectGo: true },
-  { text: "It's your birthday! Collect ₹100 from every player.", action: "collectEach", amount: 100 },
-  { text: "Pay ₹400 for neighbourhood repairs.", action: "repairs", house: 40, hotel: 115 },
-  { text: "You returned a lost wallet. Collect a ₹200 reward.", action: "collect", amount: 200 },
-  { text: "Pay a traffic fine of ₹150.", action: "pay", amount: 150 },
-  { text: "You won a community award. Collect ₹500.", action: "collect", amount: 500 },
-  { text: "Pay ₹250 to each player for your treat.", action: "payEach", amount: 250 },
-  { text: "A bank transfer was made in your favour. Collect ₹200.", action: "collect", amount: 200 },
-  { text: "Pay ₹50 for a doctor's visit.", action: "pay", amount: 50 },
-  { text: "Your auntie sent you a festival gift. Collect ₹50.", action: "collect", amount: 50 },
-  { text: "Donate ₹100 to the neighbourhood festival.", action: "pay", amount: 100 },
+  { text: "Advance to GO. Collect â‚¹200.", action: "move", target: 0, collectGo: true },
+  { text: "It's your birthday! Collect â‚¹100 from every player.", action: "collectEach", amount: 100 },
+  { text: "Pay â‚¹400 for neighbourhood repairs.", action: "repairs", house: 40, hotel: 115 },
+  { text: "You returned a lost wallet. Collect a â‚¹200 reward.", action: "collect", amount: 200 },
+  { text: "Pay a traffic fine of â‚¹150.", action: "pay", amount: 150 },
+  { text: "You won a community award. Collect â‚¹500.", action: "collect", amount: 500 },
+  { text: "Pay â‚¹250 to each player for your treat.", action: "payEach", amount: 250 },
+  { text: "A bank transfer was made in your favour. Collect â‚¹200.", action: "collect", amount: 200 },
+  { text: "Pay â‚¹50 for a doctor's visit.", action: "pay", amount: 50 },
+  { text: "Your auntie sent you a festival gift. Collect â‚¹50.", action: "collect", amount: 50 },
+  { text: "Donate â‚¹100 to the neighbourhood festival.", action: "pay", amount: 100 },
 ];
 
-const TOKENS = ["🛺", "🐘", "🪁", "🚂", "🦚", "🥭", "🐅", "🪔", "🥁", "🐪"];
+const TOKENS = ["ðŸ›º", "ðŸ˜", "ðŸª", "ðŸš‚", "ðŸ¦š", "ðŸ¥­", "ðŸ…", "ðŸª”", "ðŸ¥", "ðŸª"];
 
 function makeProperties() {
   const properties = {};
@@ -143,19 +151,34 @@ function shuffled(cards) {
   return deck;
 }
 
-export function createGame(roomCode, lobbyPlayers) {
-  if (lobbyPlayers.length < 2 || lobbyPlayers.length > MAX_PLAYERS) {
+export function createGame(roomCode, lobbyPlayers, ruleSet = "classic", settings = {}) {
+  if (lobbyPlayers.length < MIN_PLAYERS || lobbyPlayers.length > MAX_PLAYERS) {
     throw new Error(`A game needs ${MIN_PLAYERS} to ${MAX_PLAYERS} players.`);
+  }
+  const preset = RULE_PRESETS[ruleSet];
+  if (!preset) throw new Error("Choose a valid game rule preset.");
+  const rules = {
+    ...preset,
+    startingCash: settings.startingCash ?? preset.startingCash,
+    auctionsEnabled: settings.auctionsEnabled ?? preset.auctionsEnabled,
+  };
+  if (!Number.isSafeInteger(rules.startingCash) || rules.startingCash < 500 || rules.startingCash > 5000) {
+    throw new Error("Starting cash must be between â‚¹500 and â‚¹5,000.");
+  }
+  if (typeof rules.auctionsEnabled !== "boolean") {
+    throw new Error("Auction setting must be enabled or disabled.");
   }
   return {
     roomCode,
+    ruleSet,
+    rules,
     board: BOARD,
     properties: makeProperties(),
     players: lobbyPlayers.map((player, index) => ({
       id: player.id,
       name: player.name,
       token: TOKENS[index],
-      cash: 1500,
+      cash: rules.startingCash,
       position: 0,
       propertyIds: [],
       inJail: false,
@@ -251,26 +274,27 @@ function charge(game, fromPlayer, toPlayer, amount, reason) {
   };
   if (game.debt) {
     game.pendingDebts.push(debt);
-    addLog(game, `${fromPlayer.name} will owe ₹${amount} for ${reason} after the current debt is resolved.`);
+    addLog(game, `${fromPlayer.name} will owe â‚¹${amount} for ${reason} after the current debt is resolved.`);
     return;
   }
   if (fromPlayer.cash < amount) {
     game.debt = debt;
     game.phase = "debt";
-    addLog(game, `${fromPlayer.name} owes ₹${amount} for ${reason}. Raise cash or declare bankruptcy.`);
+    addLog(game, `${fromPlayer.name} owes â‚¹${amount} for ${reason}. Raise cash or declare bankruptcy.`);
     return;
   }
   fromPlayer.cash -= amount;
   if (toPlayer) toPlayer.cash += amount;
-  addLog(game, `${fromPlayer.name} pays ₹${amount}${toPlayer ? ` to ${toPlayer.name}` : ""} for ${reason}.`);
+  addLog(game, `${fromPlayer.name} pays â‚¹${amount}${toPlayer ? ` to ${toPlayer.name}` : ""} for ${reason}.`);
 }
 
 function moveTo(game, player, target, collectGo = false, rentMultiplier = 1) {
   const previous = player.position;
   player.position = ((target % 40) + 40) % 40;
   if (collectGo || (target >= 40 && Math.floor(target / 40) > Math.floor(previous / 40))) {
-    player.cash += 200;
-    addLog(game, `${player.name} passes GO and collects ₹200.`);
+    const salary = collectGo ? 200 : game.rules.goSalary;
+    player.cash += salary;
+    addLog(game, `${player.name} passes GO and collects â‚¹${salary}.`);
   }
   if (game.phase === "debt") return;
   resolveSpace(game, player, rentMultiplier);
@@ -312,7 +336,13 @@ function resolveSpace(game, player, rentMultiplier = 1) {
       return;
     }
     if (property.ownerId !== player.id && !property.mortgaged) {
-      charge(game, player, playerById(game, property.ownerId), rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier, property.name + " rent");
+      charge(
+        game,
+        player,
+        playerById(game, property.ownerId),
+        rentFor(game, property, game.dice[0] + game.dice[1]) * rentMultiplier * game.rules.rentMultiplier,
+        property.name + " rent",
+      );
     }
     return;
   }
@@ -402,12 +432,12 @@ function advanceDebtQueue(game, resumePhase) {
       const creditor = debt.creditorId ? playerById(game, debt.creditorId) : null;
       debtor.cash -= debt.amount;
       if (creditor) creditor.cash += debt.amount;
-      addLog(game, `${debtor.name} pays ₹${debt.amount} for ${debt.reason}.`);
+      addLog(game, `${debtor.name} pays â‚¹${debt.amount} for ${debt.reason}.`);
       continue;
     }
     game.debt = debt;
     game.phase = "debt";
-    addLog(game, `${debtor.name} owes ₹${debt.amount} for ${debt.reason}. Raise cash or declare bankruptcy.`);
+    addLog(game, `${debtor.name} owes â‚¹${debt.amount} for ${debt.reason}. Raise cash or declare bankruptcy.`);
     return;
   }
   if (game.pendingTurnAdvance) {
@@ -424,7 +454,7 @@ function completeDebt(game, player) {
   const creditor = debt.creditorId ? playerById(game, debt.creditorId) : null;
   player.cash -= debt.amount;
   if (creditor) creditor.cash += debt.amount;
-  addLog(game, `${player.name} pays ₹${debt.amount} for ${debt.reason}.`);
+  addLog(game, `${player.name} pays â‚¹${debt.amount} for ${debt.reason}.`);
   advanceDebtQueue(game, debt.resumePhase);
 }
 
@@ -436,7 +466,7 @@ function finishAuction(game) {
     bidder.cash -= auction.highestBid;
     bidder.propertyIds.push(property.id);
     property.ownerId = bidder.id;
-    addLog(game, `${bidder.name} wins ${property.name} at auction for ₹${auction.highestBid}.`);
+    addLog(game, `${bidder.name} wins ${property.name} at auction for â‚¹${auction.highestBid}.`);
   } else {
     addLog(game, `${game.properties[auction.propertyId].name} remains unsold after the auction.`);
   }
@@ -485,15 +515,15 @@ function performRoll(game, player, action) {
   if (game.phase !== "rolling") throw new Error("You cannot roll right now.");
   if (player.inJail) {
     if (action === "jail-pay") {
-      if (player.cash < 50) throw new Error("You need ₹50 to pay the jail fine.");
+      if (player.cash < 50) throw new Error("You need â‚¹50 to pay the jail fine.");
       player.cash -= 50;
       player.inJail = false;
       player.jailTurns = 0;
-      addLog(game, `${player.name} pays ₹50 to leave Jail.`);
+      addLog(game, `${player.name} pays â‚¹50 to leave Jail.`);
       rollForPlayer(game, player);
       return;
     }
-    if (action !== "jail-roll") throw new Error("Roll for doubles or pay ₹50 to leave Jail.");
+    if (action !== "jail-roll") throw new Error("Roll for doubles or pay â‚¹50 to leave Jail.");
     const dice = rollDice();
     game.dice = dice;
     addLog(game, `${player.name} rolls ${dice[0]} + ${dice[1]} in Jail.`);
@@ -511,7 +541,7 @@ function performRoll(game, player, action) {
         player.cash -= 50;
         player.inJail = false;
         player.jailTurns = 0;
-        addLog(game, `${player.name} pays ₹50 after three failed rolls and leaves Jail.`);
+        addLog(game, `${player.name} pays â‚¹50 after three failed rolls and leaves Jail.`);
         moveTo(game, player, player.position + dice[0] + dice[1]);
       }
     } else {
@@ -544,11 +574,11 @@ export function performGameAction(game, playerId, payload) {
     } else {
       const bid = normalizeCash(payload.amount);
       if (bid === null || bid <= auction.highestBid || bid > player.cash) {
-        throw new Error(`Bid more than ₹${auction.highestBid} and no more than your available cash.`);
+        throw new Error(`Bid more than â‚¹${auction.highestBid} and no more than your available cash.`);
       }
       auction.highestBid = bid;
       auction.highestBidderId = player.id;
-      addLog(game, `${player.name} bids ₹${bid} for ${game.properties[auction.propertyId].name}.`);
+      addLog(game, `${player.name} bids â‚¹${bid} for ${game.properties[auction.propertyId].name}.`);
     }
     advanceAuction(game, player.id);
     return;
@@ -653,16 +683,16 @@ export function performGameAction(game, playerId, payload) {
       }
       property.mortgaged = true;
       player.cash += Math.floor(property.price / 2);
-      addLog(game, `${player.name} mortgages ${property.name} for ₹${Math.floor(property.price / 2)}.`);
+      addLog(game, `${player.name} mortgages ${property.name} for â‚¹${Math.floor(property.price / 2)}.`);
       completeDebt(game, player);
       return;
     }
     if (action === "unmortgage") {
       const cost = Math.ceil(property.price * 0.55);
-      if (!property.mortgaged || player.cash < cost) throw new Error(`Unmortgaging costs ₹${cost}.`);
+      if (!property.mortgaged || player.cash < cost) throw new Error(`Unmortgaging costs â‚¹${cost}.`);
       player.cash -= cost;
       property.mortgaged = false;
-      addLog(game, `${player.name} unmortgages ${property.name} for ₹${cost}.`);
+      addLog(game, `${player.name} unmortgages ${property.name} for â‚¹${cost}.`);
       completeDebt(game, player);
       return;
     }
@@ -683,7 +713,7 @@ export function performGameAction(game, playerId, payload) {
       if (property.houses !== maximum || property.houses === 0) throw new Error("Sell buildings evenly across your colour set.");
       property.houses -= 1;
       player.cash += Math.floor(property.houseCost / 2);
-      addLog(game, `${player.name} sells a building on ${property.name} for ₹${Math.floor(property.houseCost / 2)}.`);
+      addLog(game, `${player.name} sells a building on ${property.name} for â‚¹${Math.floor(property.houseCost / 2)}.`);
       completeDebt(game, player);
     }
     return;
@@ -740,8 +770,14 @@ export function performGameAction(game, playerId, payload) {
       property.ownerId = player.id;
       player.propertyIds.push(property.id);
       player.cash -= property.price;
-      addLog(game, `${player.name} buys ${property.name} for ₹${property.price}.`);
+      addLog(game, `${player.name} buys ${property.name} for â‚¹${property.price}.`);
     } else {
+      if (!game.rules.auctionsEnabled) {
+        addLog(game, `${property.name} remains unsold; auctions are disabled.`);
+        completeDebt(game, player);
+        if (game.phase !== "debt") game.phase = game.canRollAgain ? "rolling" : "end-turn";
+        return;
+      }
       startAuction(game, property.id);
       return;
     }
