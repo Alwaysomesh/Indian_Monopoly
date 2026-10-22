@@ -363,6 +363,118 @@ test("learning bots make fair trade offers and evaluate incoming offers", () => 
   assert.equal(game.properties.udaipur.ownerId, "player-one");
 });
 
+test("learning bots invest in the best affordable monopoly house while keeping a cash reserve", () => {
+  const players = [
+    { id: "player-one", name: "Asha", connected: true },
+    { id: "bot-one", name: "Chai Champion", connected: true, isAiBot: true },
+  ];
+  const game = createGame("TEST01", players);
+  const bot = game.players[1];
+  const orangeProperties = Object.values(game.properties).filter((property) => property.group === "orange");
+  for (const property of orangeProperties) {
+    property.ownerId = bot.id;
+    bot.propertyIds.push(property.id);
+  }
+  bot.cash = 1500;
+  game.currentPlayerIndex = 1;
+
+  assert.equal(advanceAiPlayer(game, bot.id), true);
+  assert.equal(game.properties.goa.houses, 1);
+  assert.equal(bot.cash, 1400);
+  assert.match(game.log[0].text, /builds a house on Goa Beaches/);
+});
+
+test("learning bots upgrade a complete evenly built color set to a hotel", () => {
+  const players = [
+    { id: "player-one", name: "Asha", connected: true },
+    { id: "bot-one", name: "Chai Champion", connected: true, isAiBot: true },
+  ];
+  const game = createGame("TEST01", players);
+  const bot = game.players[1];
+  const yellowProperties = Object.values(game.properties).filter((property) => property.group === "yellow");
+  for (const property of yellowProperties) {
+    property.ownerId = bot.id;
+    property.houses = 4;
+    bot.propertyIds.push(property.id);
+  }
+  bot.cash = 2000;
+  game.currentPlayerIndex = 1;
+
+  assert.equal(advanceAiPlayer(game, bot.id), true);
+  assert.equal(yellowProperties.filter((property) => property.houses === 5).length, 1);
+  assert.equal(bot.cash, 2000 - yellowProperties[0].houseCost);
+  assert.match(game.log[0].text, /builds a hotel on/);
+});
+
+test("learning bots account for the construction-boom price increase", () => {
+  const players = [
+    { id: "player-one", name: "Asha", connected: true },
+    { id: "bot-one", name: "Chai Champion", connected: true, isAiBot: true },
+  ];
+  const game = createGame("TEST01", players, "classic", { seasonsEnabled: true });
+  const bot = game.players[1];
+  for (const property of Object.values(game.properties).filter((item) => item.group === "orange")) {
+    property.ownerId = bot.id;
+    bot.propertyIds.push(property.id);
+  }
+  bot.cash = 300;
+  game.seasonEvent = { id: "construction-boom", title: "Construction Boom", description: "Construction costs are doubled." };
+  game.currentPlayerIndex = 1;
+
+  assert.equal(advanceAiPlayer(game, bot.id), true);
+  assert.equal(game.properties.goa.houses, 1);
+  assert.equal(bot.cash, 100);
+});
+
+test("learning bots do not build through mortgages or spend their cash reserve", () => {
+  const players = [
+    { id: "player-one", name: "Asha", connected: true },
+    { id: "bot-one", name: "Chai Champion", connected: true, isAiBot: true },
+  ];
+  const mortgagedGame = createGame("TEST01", players);
+  const mortgagedBot = mortgagedGame.players[1];
+  const brownProperties = Object.values(mortgagedGame.properties).filter((property) => property.group === "brown");
+  for (const property of brownProperties) {
+    property.ownerId = mortgagedBot.id;
+    mortgagedBot.propertyIds.push(property.id);
+  }
+  brownProperties[0].mortgaged = true;
+  mortgagedGame.currentPlayerIndex = 1;
+  mortgagedGame.phase = "end-turn";
+
+  assert.equal(advanceAiPlayer(mortgagedGame, mortgagedBot.id), true);
+  assert.equal(brownProperties.every((property) => property.houses === 0), true);
+
+  const reserveGame = createGame("TEST01", players);
+  const reserveBot = reserveGame.players[1];
+  for (const property of Object.values(reserveGame.properties).filter((item) => item.group === "brown")) {
+    property.ownerId = reserveBot.id;
+    reserveBot.propertyIds.push(property.id);
+  }
+  reserveBot.cash = 140;
+  reserveGame.currentPlayerIndex = 1;
+  reserveGame.phase = "end-turn";
+
+  assert.equal(advanceAiPlayer(reserveGame, reserveBot.id), true);
+  assert.equal(Object.values(reserveGame.properties).filter((property) => property.group === "brown").every((property) => property.houses === 0), true);
+  assert.equal(reserveBot.cash, 140);
+});
+
+test("a disconnected player's takeover bot can build on its monopoly", () => {
+  const game = createGame("TEST01", lobby);
+  const player = game.players[0];
+  player.connected = false;
+  for (const property of Object.values(game.properties).filter((item) => item.group === "brown")) {
+    property.ownerId = player.id;
+    player.propertyIds.push(property.id);
+  }
+  game.phase = "end-turn";
+
+  assert.equal(advanceDisconnectedPlayer(game, player.id), true);
+  assert.equal(player.botControlled, true);
+  assert.equal(Object.values(game.properties).filter((property) => property.group === "brown").some((property) => property.houses > 0), true);
+});
+
 test("a non-current player cannot roll", () => {
   const game = createGame("TEST01", lobby);
   assert.throws(() => performGameAction(game, "player-two", { action: "roll" }), /Wait for your turn/);
