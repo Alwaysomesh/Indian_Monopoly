@@ -1124,62 +1124,6 @@ function GameTable({
               </section>
             </div>
           )}
-          {showTradeDialog && (
-            <div className="card-backdrop trade-backdrop" onClick={() => setShowTradeDialog(false)}>
-              <section
-                aria-labelledby="trade-dialog-heading"
-                aria-modal="true"
-                className="trade-dialog"
-                onClick={(event) => event.stopPropagation()}
-                role="dialog"
-              >
-                <button aria-label="Close trade proposal" className="card-dismiss" onClick={() => setShowTradeDialog(false)}>×</button>
-                <small>NEGOTIATE YOUR NEXT MOVE</small>
-                <h2 id="trade-dialog-heading">{counteringTradeId ? "Make a counteroffer" : "Propose a trade"}</h2>
-                <form onSubmit={submitTrade}>
-                  <label htmlFor="trade-target">Trade with</label>
-                  <select disabled={Boolean(counteringTradeId)} id="trade-target" value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
-                    <option value="">Choose a player</option>
-                    {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
-                  </select>
-                  <div className="trade-cash-fields">
-                    <label>Cash you offer (₹)<input min="0" max={me?.cash ?? 0} step="1" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} /></label>
-                    <label>Cash you request (₹)<input min="0" max={game.players.find((player) => player.id === tradeTarget)?.cash ?? 0} step="1" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} /></label>
-                  </div>
-                  <div className="trade-property-columns">
-                    <div>
-                      <label htmlFor="trade-search-from">Your properties to offer</label>
-                      <input id="trade-search-from" className="trade-search" placeholder="Find a property" value={tradeSearchFrom} onChange={(event) => setTradeSearchFrom(event.target.value)} />
-                      <div className="trade-property-options">
-                        {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
-                          .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchFrom.trim().toLowerCase()))
-                          .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
-                        {!me?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>No tradable properties to offer.</small>}
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="trade-search-to">Their properties to request</label>
-                      <input id="trade-search-to" className="trade-search" placeholder="Find a property" value={tradeSearchTo} onChange={(event) => setTradeSearchTo(event.target.value)} />
-                      <div className="trade-property-options">
-                        {game.players.find((player) => player.id === tradeTarget)?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
-                          .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchTo.trim().toLowerCase()))
-                          .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesTo.includes(id)} onChange={() => toggleSelection(propertiesTo, setPropertiesTo, id)} />{propertyName(game, id)}</label>)}
-                        {tradeTarget && !game.players.find((player) => player.id === tradeTarget)?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>They have no tradable properties.</small>}
-                      </div>
-                    </div>
-                  </div>
-                  {tradeError && <p className="error-message" role="alert">{tradeError}</p>}
-                  <button
-                    className="action-button compact-action"
-                    disabled={!tradeTarget || game.phase === "finished" || !Number.isSafeInteger(Number(cashFrom)) || !Number.isSafeInteger(Number(cashTo)) || Number(cashFrom) > (me?.cash ?? 0) || Number(cashTo) > (game.players.find((player) => player.id === tradeTarget)?.cash ?? 0)}
-                    type="submit"
-                  >
-                    {counteringTradeId ? "Send counteroffer" : "Send trade proposal"}
-                  </button>
-                </form>
-              </section>
-            </div>
-          )}
           <div className="player-strip">
             {game.players.map((player, index) => (
               <div className={`player-card ${player.id === currentPlayer?.id ? "is-current" : ""} ${player.bankrupt ? "is-bankrupt" : ""}`} key={player.id}>
@@ -1312,6 +1256,62 @@ function GameTable({
           )}
 
           <section className="detail-panel">
+            {showTradeDialog && (
+              <div className="card-backdrop trade-backdrop" onClick={() => setShowTradeDialog(false)}>
+                <section
+                  aria-labelledby="trade-dialog-heading"
+                  aria-modal="true"
+                  className="trade-dialog"
+                  onClick={(event) => event.stopPropagation()}
+                  role="dialog"
+                >
+                  <button aria-label="Close trade proposal" className="card-dismiss" onClick={() => setShowTradeDialog(false)}>×</button>
+                  <small>NEGOTIATE YOUR NEXT MOVE</small>
+                  <h2 id="trade-dialog-heading">{counteringTradeId ? "Make a counteroffer" : "Propose a trade"}</h2>
+                  <form onSubmit={submitTrade}>
+                    <label htmlFor="trade-target">Trade with</label>
+                    <select disabled={Boolean(counteringTradeId)} id="trade-target" value={tradeTarget} onChange={(event) => { setTradeTarget(event.target.value); setPropertiesTo([]); }}>
+                      <option value="">Choose a player</option>
+                      {game.players.filter((player) => player.id !== playerId && !player.bankrupt).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}
+                    </select>
+                    <div className="trade-cash-fields">
+                      <label>Cash you offer (₹)<input min="0" max={me?.cash ?? 0} step="1" type="number" value={cashFrom} onChange={(event) => setCashFrom(event.target.value)} /></label>
+                      <label>Cash you request (₹)<input min="0" max={game.players.find((player) => player.id === tradeTarget)?.cash ?? 0} step="1" type="number" value={cashTo} onChange={(event) => setCashTo(event.target.value)} /></label>
+                    </div>
+                    <div className="trade-property-columns">
+                      <div>
+                        <label htmlFor="trade-search-from">Your properties to offer</label>
+                        <input id="trade-search-from" className="trade-search" placeholder="Find a property" value={tradeSearchFrom} onChange={(event) => setTradeSearchFrom(event.target.value)} />
+                        <div className="trade-property-options">
+                          {me?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
+                            .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchFrom.trim().toLowerCase()))
+                            .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesFrom.includes(id)} onChange={() => toggleSelection(propertiesFrom, setPropertiesFrom, id)} />{propertyName(game, id)}</label>)}
+                          {!me?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>No tradable properties to offer.</small>}
+                        </div>
+                      </div>
+                      <div>
+                        <label htmlFor="trade-search-to">Their properties to request</label>
+                        <input id="trade-search-to" className="trade-search" placeholder="Find a property" value={tradeSearchTo} onChange={(event) => setTradeSearchTo(event.target.value)} />
+                        <div className="trade-property-options">
+                          {game.players.find((player) => player.id === tradeTarget)?.propertyIds.filter((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged)
+                            .filter((id) => propertyName(game, id).toLowerCase().includes(tradeSearchTo.trim().toLowerCase()))
+                            .map((id) => <label className="check-option" key={id}><input type="checkbox" checked={propertiesTo.includes(id)} onChange={() => toggleSelection(propertiesTo, setPropertiesTo, id)} />{propertyName(game, id)}</label>)}
+                          {tradeTarget && !game.players.find((player) => player.id === tradeTarget)?.propertyIds.some((id) => !game.properties[id]?.houses && !game.properties[id]?.mortgaged) && <small>They have no tradable properties.</small>}
+                        </div>
+                      </div>
+                    </div>
+                    {tradeError && <p className="error-message" role="alert">{tradeError}</p>}
+                    <button
+                      className="action-button compact-action"
+                      disabled={!tradeTarget || game.phase === "finished" || !Number.isSafeInteger(Number(cashFrom)) || !Number.isSafeInteger(Number(cashTo)) || Number(cashFrom) > (me?.cash ?? 0) || Number(cashTo) > (game.players.find((player) => player.id === tradeTarget)?.cash ?? 0)}
+                      type="submit"
+                    >
+                      {counteringTradeId ? "Send counteroffer" : "Send trade proposal"}
+                    </button>
+                  </form>
+                </section>
+              </div>
+            )}
             <div className="detail-tabs">
               <button className={tab === "properties" ? "selected-tab" : ""} onClick={() => { setTab("properties"); setMobileView("players"); }}>Properties</button>
               <button className={tab === "trade" ? "selected-tab" : ""} onClick={() => { setTab("trade"); setMobileView("trade"); }}>Trade</button>
