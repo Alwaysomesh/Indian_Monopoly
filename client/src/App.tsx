@@ -472,6 +472,8 @@ function GameTable({
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
+  const boardSpaceRefs = useRef<Array<HTMLDivElement | null>>([]);
+  const hasFocusedPlayerSpace = useRef(false);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
   const [visualPositions, setVisualPositions] = useState<Record<string, number>>({});
@@ -484,6 +486,15 @@ function GameTable({
     const timer = window.setInterval(() => setNow(Date.now()), 250);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (hasFocusedPlayerSpace.current) return;
+    const player = game.players.find((entry) => entry.id === playerId);
+    const boardSpace = player ? boardSpaceRefs.current[player.position] : null;
+    if (!boardSpace) return;
+    hasFocusedPlayerSpace.current = true;
+    window.requestAnimationFrame(() => boardSpace.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" }));
+  }, [game.players, playerId]);
 
   useEffect(() => {
     if (tab !== "chat") return;
@@ -634,7 +645,7 @@ function GameTable({
         <section className="board-column">
           <div className="turn-banner">
             <div>
-              <span className="turn-kicker">{game.phase === "finished" ? "GAME OVER" : `TURN ${game.turnNumber}`}</span>
+              <span className="turn-kicker">{game.phase === "finished" ? "GAME OVER" : `ROUND ${game.roundNumber} · TURN ${game.turnNumber}`}</span>
               <strong>
                 {game.phase === "finished" ? "🏆" : currentPlayer?.token}{" "}
                 {game.phase === "finished"
@@ -661,6 +672,7 @@ function GameTable({
               </div>
               {game.board.map((space, index) => {
                 const property = getPropertyForSpace(game, space.propertyId);
+                const owner = property?.ownerId ? game.players.find((player) => player.id === property.ownerId) : undefined;
                 const occupants = game.players.filter((player) =>
                   !player.bankrupt && (visualPositions[player.id] ?? player.position) === index,
                 );
@@ -669,6 +681,7 @@ function GameTable({
                   <div
                     className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""}`}
                     key={space.id}
+                    ref={(element) => { boardSpaceRefs.current[index] = element; }}
                     onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
                     onKeyDown={property ? (event) => { if (event.key === "Enter" || event.key === " ") setSelectedPropertyId(property.id); } : undefined}
                     role={property ? "button" : undefined}
@@ -679,7 +692,7 @@ function GameTable({
                     {property && <span className={`space-color color-${property.group}`} />}
                     <span className="space-label">{property?.name ?? space.label}</span>
                     {property && <span className="space-price">{formatMoney(property.price)}</span>}
-                    {property?.ownerId && <span aria-label={`Owned by ${game.players.find((player) => player.id === property.ownerId)?.name ?? "another player"}`} className="owner-mark" title={`Owned by ${game.players.find((player) => player.id === property.ownerId)?.name ?? "another player"}`} style={{ background: playerColor(game.players.findIndex((player) => player.id === property.ownerId)) }} />}
+                    {owner && <span aria-label={`Owned by ${owner.name} (${owner.token})`} className="owner-mark" title={`${owner.name} · ${owner.token}`} style={{ background: playerColor(game.players.indexOf(owner)) }}>{owner.token}</span>}
                     {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "🏨" : "🏠".repeat(Math.min(property.houses, 4))}</span>}
                     {occupants.length > 0 && (
                       <span className="space-tokens">
