@@ -4,7 +4,15 @@ An Indian-themed, real-time Monopoly-style game for 2–10 players. The Node.js 
 
 ## Play online
 
-Open [indian-monopoly.onrender.com](https://indian-monopoly.onrender.com), create a private room, share its code with friends, and start when at least two players have joined. Players can buy Indian city and landmark properties, pay rent and taxes, build houses and hotels, mortgage properties, go to jail, bid in property auctions, trade, and chat.
+Open [indian-monopoly.onrender.com](https://indian-monopoly.onrender.com), create a private room, share its code with friends, and start when at least two players have joined. Players can buy Indian city and landmark properties, pay rent and taxes, build houses and hotels, mortgage properties, go to jail, bid in property auctions, trade, and chat. In chat, quick reactions add lightweight banter; when a game ends, a match recap highlights the champion, cash leader, property collector, and skyline builder, with an option to copy the recap.
+
+In the lobby, the host can remove players and choose a rules preset before starting:
+
+- **Classic:** ₹1,500 starting cash, ₹200 for passing GO, standard rent.
+- **Quick:** ₹1,200 starting cash, ₹300 for passing GO, double rent.
+- **Chaos:** ₹1,000 starting cash, ₹400 for passing GO, triple rent.
+
+The host can also customize starting cash from ₹500 to ₹5,000 and turn property auctions on or off before the game starts. If auctions are off, a declined property stays unowned.
 
 The Render free instance can sleep after inactivity, so its first request may take around 50 seconds. Room and game state is held in server memory and is lost when the service restarts. It is a casual game implementation, not an official Monopoly product; some edge rules differ from the physical board game.
 
