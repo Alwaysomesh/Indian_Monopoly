@@ -1070,7 +1070,7 @@ function GameTable({
           </div>
           <div className="board-wrap">
             <div className="board-grid">
-              <div aria-label="Current turn" className={`board-center ${isMyTurn ? "is-my-turn" : ""}`}>
+              <div aria-label="Current turn" className={`board-center ${isMyTurn ? "is-my-turn" : ""} ${game.phase === "auction" && game.auction?.turnPlayerId === playerId ? "has-auction-controls" : ""}`}>
                 <p className="board-subtitle">ROUND {game.roundNumber} · TURN {game.turnNumber}</p>
                 <strong className={`center-turn ${isMyTurn ? "center-my-turn" : ""}`}>
                   {game.phase === "finished"
@@ -1091,7 +1091,7 @@ function GameTable({
                     ? `${secondsRemaining}s to ${game.phase === "rolling" ? "roll" : "act"}`
                     : game.canRollAgain && isMyTurn ? "DOUBLES! ROLL AGAIN" : "THE CITY IS YOURS"}
                 </p>
-                <section className={`action-panel ${game.phase === "buying" && pendingProperty ? "property-purchase-actions" : ""}`}>
+                <section className={`action-panel ${game.phase === "buying" && pendingProperty ? "property-purchase-actions" : ""} ${game.phase === "auction" && game.auction?.turnPlayerId === playerId ? "auction-action-panel" : ""}`}>
                   <p className="panel-kicker">YOUR MOVE</p>
                   {game.phase === "finished" ? (
                     <div className="action-message">{game.endReason === "time-limit" ? "Time is up! The champion is ranked by cash, then properties." : "The game is over. Thanks for playing!"}</div>
