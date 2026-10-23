@@ -494,6 +494,7 @@ footer b { color: #c8793b; }
   .table-layout[data-mobile-view="trade"] .game-tools-drawer > :not(.detail-panel),
   .table-layout[data-mobile-view="chat"] .game-tools-drawer > :not(.detail-panel),
   .table-layout[data-mobile-view="log"] .game-tools-drawer > :not(.log-panel) { display: none; }
+  .turn-banner { display: none; }
   .table-layout[data-mobile-view="log"] .log-list { max-height: none; overflow: visible; }
 }
 
