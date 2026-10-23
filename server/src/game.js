@@ -280,6 +280,82 @@ export function finishTimedGame(game) {
   return true;
 }
 
+export function eliminatePlayerByVote(game, playerId) {
+  if (game.phase === "finished") throw new Error("The game has already finished.");
+  const player = playerById(game, playerId);
+  if (!player || player.isAiBot || player.bankrupt) throw new Error("That player cannot be voted out.");
+
+  const wasCurrentPlayer = currentPlayer(game).id === player.id;
+  const resumePhase = game.debt?.resumePhase ?? (game.canRollAgain ? "rolling" : "end-turn");
+  player.bankrupt = true;
+  player.cash = 0;
+  player.connected = false;
+  player.botControlled = false;
+
+  for (const propertyId of player.propertyIds) {
+    const property = game.properties[propertyId];
+    if (!property) continue;
+    property.ownerId = null;
+    property.houses = 0;
+    property.mortgaged = false;
+  }
+  player.propertyIds = [];
+
+  for (const trade of game.trades) {
+    if (trade.status === "pending" &&
+        (trade.fromPlayerId === player.id || trade.toPlayerId === player.id)) {
+      trade.status = "cancelled";
+    }
+  }
+
+  if (game.debt?.debtorId === player.id) {
+    game.debt = null;
+    game.pendingDebts = game.pendingDebts.filter((debt) => debt.debtorId !== player.id);
+    game.pendingTurnAdvance ||= wasCurrentPlayer;
+  } else if (game.debt?.creditorId === player.id) {
+    game.debt.creditorId = null;
+  }
+  game.pendingDebts = game.pendingDebts.filter((debt) => debt.debtorId !== player.id);
+  for (const debt of game.pendingDebts) {
+    if (debt.creditorId === player.id) debt.creditorId = null;
+  }
+
+  if (game.auction) {
+    if (game.auction.highestBidderId === player.id) {
+      game.auction.highestBidderId = null;
+      game.auction.highestBid = 0;
+    }
+    if (!game.auction.passedPlayerIds.includes(player.id)) {
+      game.auction.passedPlayerIds.push(player.id);
+    }
+    if (game.auction.turnPlayerId === player.id) advanceAuction(game, player.id);
+  }
+
+  addLog(game, `${player.name} was voted out; their properties return to the bank.`);
+  if (game.phase === "debt" && !game.debt) {
+    advanceDebtQueue(game, resumePhase);
+    if (game.phase === "finished" || currentPlayer(game).id !== player.id) return;
+  }
+  if (activePlayers(game).length <= 1) {
+    game.debt = null;
+    game.pendingDebts = [];
+    game.pendingTurnAdvance = false;
+    game.auction = null;
+    game.pendingPurchase = null;
+    game.phase = "end-turn";
+    nextPlayer(game);
+  } else if (wasCurrentPlayer) {
+    if (game.phase === "debt" || game.phase === "auction") {
+      game.pendingTurnAdvance = true;
+    } else {
+      game.pendingPurchase = null;
+      game.canRollAgain = false;
+      game.phase = "end-turn";
+      nextPlayer(game);
+    }
+  }
+}
+
 function addLog(game, text) {
   game.log.unshift({ id: randomBytes(6).toString("hex"), text, createdAt: Date.now() });
   game.log = game.log.slice(0, 40);
@@ -642,8 +718,18 @@ function finishAuction(game) {
     return;
   }
   if (continuation?.source === "sarkari") {
+    if (game.pendingTurnAdvance) {
+      game.pendingTurnAdvance = false;
+      nextPlayer(game);
+      return;
+    }
     game.phase = "rolling";
     game.deadlineAt = null;
+    return;
+  }
+  if (game.pendingTurnAdvance) {
+    game.pendingTurnAdvance = false;
+    nextPlayer(game);
     return;
   }
   game.phase = game.canRollAgain ? "rolling" : "end-turn";

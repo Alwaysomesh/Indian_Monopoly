@@ -34,6 +34,14 @@ interface ClientToServerEvents {
     payload: { targetPlayerId: string },
     acknowledge: (response: { ok: boolean; error?: string }) => void,
   ) => void;
+  "game:vote-kick": (
+    payload: { targetPlayerId: string },
+    acknowledge: (response: { ok: boolean; error?: string }) => void,
+  ) => void;
+  "game:vote-kick-cast": (
+    payload: { approve: boolean },
+    acknowledge: (response: { ok: boolean; error?: string }) => void,
+  ) => void;
   "game:action": (
     payload: GameAction,
     acknowledge: (response: { ok: boolean; error?: string }) => void,
@@ -144,7 +152,7 @@ export default function App() {
       localStorage.removeItem("monopoly.room-code");
       setRoom(null);
       setGame(null);
-      setError("The host removed you from this room.");
+      setError("You were removed from this game.");
     };
 
     socket.on("connect", onConnect);
@@ -251,6 +259,7 @@ export default function App() {
       <GameTable
         connected={connected}
         game={game}
+        room={room}
         isHost={room.hostId === playerId}
         onAction={(action, onComplete) => {
           setError("");
@@ -267,6 +276,18 @@ export default function App() {
           });
         }}
         onLeave={leaveRoom}
+        onVoteKick={(targetPlayerId) => {
+          setError("");
+          socket.emit("game:vote-kick", { targetPlayerId }, (response) => {
+            if (!response.ok) setError(response.error ?? "Could not start the vote.");
+          });
+        }}
+        onCastVote={(approve) => {
+          setError("");
+          socket.emit("game:vote-kick-cast", { approve }, (response) => {
+            if (!response.ok) setError(response.error ?? "Could not record your vote.");
+          });
+        }}
         playerId={playerId}
         error={error}
       />
@@ -539,19 +560,25 @@ export default function App() {
 function GameTable({
   connected,
   game,
+  room,
   isHost,
   onAction: sendAction,
   onRematch,
   onLeave,
+  onVoteKick,
+  onCastVote,
   playerId,
   error,
 }: {
   connected: boolean;
   game: GameState;
+  room: PublicRoom;
   isHost: boolean;
   onAction: (action: GameAction, onComplete?: (response: { ok: boolean; error?: string }) => void) => void;
   onRematch: () => void;
   onLeave: () => void;
+  onVoteKick: (targetPlayerId: string) => void;
+  onCastVote: (approve: boolean) => void;
   playerId: string;
   error: string;
 }) {
@@ -577,6 +604,8 @@ function GameTable({
   const [followPlayerPiece, setFollowPlayerPiece] = useState(true);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [mobileView, setMobileView] = useState<MobileGameView>("board");
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [darkMode, setDarkMode] = useState(() => localStorage.getItem("monopoly.dark-mode") === "true");
   const [logFilter, setLogFilter] = useState<"all" | LogCategory>("all");
   const [showHelp, setShowHelp] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
@@ -589,6 +618,14 @@ function GameTable({
   const [soundEnabled, setSoundEnabled] = useState(() =>
     typeof window.AudioContext !== "undefined" && localStorage.getItem("monopoly.sound-enabled") === "true",
   );
+  const [musicEnabled, setMusicEnabled] = useState(() =>
+    typeof window.AudioContext !== "undefined" && localStorage.getItem("monopoly.music-enabled") === "true",
+  );
+  const [musicReady, setMusicReady] = useState(false);
+  const [musicVolume, setMusicVolume] = useState(() => {
+    const savedVolume = Number(localStorage.getItem("monopoly.music-volume"));
+    return Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 100 ? savedVolume : 28;
+  });
   const [drawnCard, setDrawnCard] = useState("");
   const [celebration, setCelebration] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
@@ -596,6 +633,8 @@ function GameTable({
   const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+  const musicTimerRef = useRef<number | null>(null);
+  const musicStepRef = useRef(0);
   const boardSpaceRefs = useRef<Array<HTMLDivElement | null>>([]);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
@@ -633,6 +672,62 @@ function GameTable({
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!musicEnabled || musicReady || typeof window.AudioContext === "undefined") return;
+    const startAfterGesture = () => {
+      const context = audioContextRef.current ?? new AudioContext();
+      audioContextRef.current = context;
+      void context.resume().then(() => setMusicReady(true)).catch((audioError) => {
+        console.error("Could not resume the game soundtrack:", audioError);
+      });
+    };
+    window.addEventListener("pointerdown", startAfterGesture, { once: true });
+    return () => window.removeEventListener("pointerdown", startAfterGesture);
+  }, [musicEnabled, musicReady]);
+
+  useEffect(() => {
+    if (!musicEnabled || !musicReady || !audioContextRef.current || musicVolume === 0) {
+      if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
+      musicTimerRef.current = null;
+      return;
+    }
+    const context = audioContextRef.current;
+    const melody = [392, 494, 587, 659, 587, 494, 440, 494];
+    musicTimerRef.current = window.setInterval(() => {
+      const step = musicStepRef.current++ % 8;
+      const now = context.currentTime;
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime((musicVolume / 100) * 0.035, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      const note = context.createOscillator();
+      note.type = "triangle";
+      note.frequency.value = melody[step];
+      note.connect(gain);
+      gain.connect(context.destination);
+      note.start(now);
+      note.stop(now + 0.21);
+
+      if (step % 2 === 0) {
+        const bass = context.createOscillator();
+        const bassGain = context.createGain();
+        bass.type = "sine";
+        bass.frequency.setValueAtTime(step === 0 ? 110 : 82, now);
+        bass.frequency.exponentialRampToValueAtTime(42, now + 0.12);
+        bassGain.gain.setValueAtTime((musicVolume / 100) * 0.1, now);
+        bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
+        bass.connect(bassGain);
+        bassGain.connect(context.destination);
+        bass.start(now);
+        bass.stop(now + 0.16);
+      }
+    }, 250);
+    return () => {
+      if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
+      musicTimerRef.current = null;
+    };
+  }, [musicEnabled, musicVolume]);
 
   useEffect(() => {
     if (!followPlayerPiece || followedPosition === undefined) return;
@@ -916,7 +1011,7 @@ function GameTable({
   const owedByMe = game.phase === "debt" && debtPlayer?.id === playerId;
 
   return (
-    <main className={`table-page ${motionEnabled ? "motion-enabled" : "motion-disabled"}`}>
+    <main className={`table-page ${motionEnabled ? "motion-enabled" : "motion-disabled"} ${darkMode ? "theme-dark" : ""} ${toolsOpen ? "tools-open" : "tools-collapsed"}`}>
       <header className="table-topbar">
         <a className="brand" href="/" aria-label="Monopoly India home">
           <img className="brand-mark" src="/brand-mark.svg" alt="" />
@@ -935,6 +1030,31 @@ function GameTable({
           <div className="table-quick-tools">
             <button className="quiet-button" onClick={() => setShowHelp(true)}>How to play</button>
             <button className="quiet-button" onClick={() => setShowPreferences(true)}>Sound & motion</button>
+            <button
+              aria-pressed={followPlayerPiece}
+              className="quiet-button follow-toggle"
+              onClick={() => setFollowPlayerPiece((following) => !following)}
+            >
+              {followPlayerPiece ? "Follow on" : "Follow off"}
+            </button>
+            <button
+              aria-pressed={darkMode}
+              className="quiet-button theme-toggle"
+              onClick={() => {
+                const next = !darkMode;
+                localStorage.setItem("monopoly.dark-mode", String(next));
+                setDarkMode(next);
+              }}
+            >
+              {darkMode ? "☀ Light" : "☾ Dark"}
+            </button>
+            <button
+              aria-expanded={toolsOpen}
+              className="quiet-button tools-toggle"
+              onClick={() => setToolsOpen((open) => !open)}
+            >
+              {toolsOpen ? "Hide tools" : "Game tools"}
+            </button>
           </div>
         </div>
         <a
@@ -975,8 +1095,39 @@ function GameTable({
               <input checked={motionEnabled} onChange={(event) => setMotionPreference(event.currentTarget.checked)} type="checkbox" />
             </label>
             <label className="preference-option">
-              <span><strong>Sound effects</strong><small>Soft cues for dice, purchases, and accepted trades</small></span>
+              <span><strong>Sound effects</strong><small>Upbeat cues for dice, purchases, and accepted trades</small></span>
               <input checked={soundEnabled} disabled={typeof window.AudioContext === "undefined"} onChange={(event) => setSoundPreference(event.currentTarget.checked)} type="checkbox" />
+            </label>
+            <label className="preference-option">
+              <span><strong>Game soundtrack</strong><small>Original, generated arcade beat · off by default</small></span>
+              <input checked={musicEnabled} disabled={typeof window.AudioContext === "undefined"} onChange={(event) => {
+                const enabled = event.currentTarget.checked;
+                localStorage.setItem("monopoly.music-enabled", String(enabled));
+                setMusicEnabled(enabled);
+                if (enabled) {
+                  const context = audioContextRef.current ?? new AudioContext();
+                  audioContextRef.current = context;
+                  void context.resume().then(() => setMusicReady(true)).catch((audioError) => {
+                    console.error("Could not enable the game soundtrack:", audioError);
+                  });
+                }
+              }} type="checkbox" />
+            </label>
+            <label className="music-volume-option">
+              Music volume
+              <input
+                aria-label="Music volume"
+                max={100}
+                min={0}
+                onChange={(event) => {
+                  const volume = Number(event.currentTarget.value);
+                  localStorage.setItem("monopoly.music-volume", String(volume));
+                  setMusicVolume(volume);
+                }}
+                type="range"
+                value={musicVolume}
+              />
+              <span>{musicVolume}%</span>
             </label>
             {typeof window.AudioContext === "undefined" && <p className="preference-note">Sound effects are not supported by this browser.</p>}
           </section>
@@ -1038,9 +1189,18 @@ function GameTable({
               <div className="board-center">
                 <p className="board-ornament">✦ &nbsp; नमस्ते &nbsp; ✦</p>
                 <p className="board-logo">MONOPOLY<br /><em>INDIA</em></p>
-                <p className="board-subtitle">A little luck. A lot of chai.</p>
+                <p className="board-subtitle">ROUND {game.roundNumber} · TURN {game.turnNumber}</p>
+                <strong className={`center-turn ${isMyTurn ? "center-my-turn" : ""}`}>
+                  {game.phase === "finished"
+                    ? `${game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "Nobody"} wins`
+                    : isMyTurn ? "YOUR MOVE" : `${currentPlayer?.name ?? "Player"}'s turn`}
+                </strong>
                 <div className="center-dice">{game.dice ? `${game.dice[0]} + ${game.dice[1]}` : "⚄  ⚄"}</div>
-                <p className="center-caption">{game.canRollAgain && isMyTurn ? "DOUBLES! ROLL AGAIN" : "THE CITY IS YOURS"}</p>
+                <p className="center-caption">
+                  {secondsRemaining !== null
+                    ? `${secondsRemaining}s to ${game.phase === "rolling" ? "roll" : "act"}`
+                    : game.canRollAgain && isMyTurn ? "DOUBLES! ROLL AGAIN" : "THE CITY IS YOURS"}
+                </p>
               </div>
               {game.board.map((space, index) => {
                 const property = getPropertyForSpace(game, space.propertyId);
@@ -1051,7 +1211,7 @@ function GameTable({
                 const position = spacePosition(index);
                 return (
                   <div
-                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""} ${property?.mortgaged ? "is-mortgaged" : ""}`}
+                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""} ${property?.mortgaged ? "is-mortgaged" : ""} ${occupants.some((player) => player.id === playerId) ? "has-my-piece" : ""}`}
                     key={space.id}
                     ref={(element) => { boardSpaceRefs.current[index] = element; }}
                     onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
@@ -1069,7 +1229,16 @@ function GameTable({
                     {property && property.houses > 0 && <span className="house-mark">{property.houses === 5 ? "🏨" : "🏠".repeat(Math.min(property.houses, 4))}</span>}
                     {occupants.length > 0 && (
                       <span className="space-tokens">
-                        {occupants.map((player) => <i key={`${player.id}-${visualPositions[player.id] ?? player.position}`} title={player.name}>{player.token}</i>)}
+                        {occupants.map((player) => (
+                          <i
+                            aria-label={`${player.name}${player.id === playerId ? ", your piece" : ""}${player.id === currentPlayer?.id ? ", current turn" : ""}`}
+                            className={`${player.id === playerId ? "is-your-piece" : ""} ${player.id === currentPlayer?.id ? "is-active-piece" : ""}`}
+                            key={`${player.id}-${visualPositions[player.id] ?? player.position}`}
+                            title={`${player.name}${player.id === playerId ? " · your piece" : ""}`}
+                          >
+                            {player.token}
+                          </i>
+                        ))}
                       </span>
                     )}
                   </div>
@@ -1224,14 +1393,51 @@ function GameTable({
             {me?.inJail && !isMyTurn && <p className="jail-note">You're in Jail until your next turn.</p>}
           </section>
 
+          <div className="game-tools-drawer">
           <section className="players-panel">
             <div className="panel-heading"><h3>Players & cash</h3><span>{game.players.filter((player) => !player.bankrupt).length} in play</span></div>
+            {room.voteKick && (
+              <div className="vote-kick-card" role="status" aria-live="polite">
+                <strong>Vote to remove {room.voteKick.targetName}</strong>
+                <p>{room.voteKick.yesVotes}/{room.voteKick.requiredVotes} approvals · {room.voteKick.yesVotes + room.voteKick.noVotes}/{room.voteKick.voterIds.length} votes cast</p>
+                <small>Two-thirds approval required. The targeted player cannot vote.</small>
+                {room.voteKick.voterIds.includes(playerId) && !(playerId in room.voteKick.votes) ? (
+                  <div className="vote-actions">
+                    <button onClick={() => onCastVote(true)}>Vote to remove</button>
+                    <button onClick={() => onCastVote(false)}>Keep player</button>
+                  </div>
+                ) : (
+                  <small>
+                    {playerId === room.voteKick.targetPlayerId
+                      ? "You are the target of this vote."
+                      : playerId in room.voteKick.votes
+                        ? `Your vote: ${room.voteKick.votes[playerId] ? "remove" : "keep"}.`
+                        : "You are not eligible to vote in this poll."}
+                  </small>
+                )}
+              </div>
+            )}
+            {room.voteKickMessage && <p className="vote-kick-result" role="status">{room.voteKickMessage}</p>}
+            {error && <p className="vote-kick-result" role="alert">{error}</p>}
             <div className="players-list">
               {game.players.map((player, index) => (
                 <div className={`player-row ${player.id === currentPlayer?.id ? "active-player" : ""}`} key={player.id}>
                   <span className="token-badge small-token" style={{ background: playerColor(index) }}>{player.token}</span>
                   <div className="player-row-name"><strong>{player.name}{player.id === playerId ? " (you)" : ""}</strong><small>{player.bankrupt ? "Bankrupt" : `${player.propertyIds.length} properties`}</small></div>
                   <b>{formatMoney(player.cash)}</b>
+                  {!room.voteKick && game.phase !== "finished" && !player.bankrupt && !player.isAiBot && player.id !== playerId && (
+                    <button
+                      aria-label={`Start a vote to remove ${player.name}`}
+                      className="vote-start-button"
+                      disabled={!player.connected || game.players.filter((candidate) =>
+                        candidate.id !== player.id && !candidate.bankrupt && candidate.connected && !candidate.isAiBot,
+                      ).length < 3}
+                      onClick={() => onVoteKick(player.id)}
+                      title="At least three other connected players must be able to vote"
+                    >
+                      Vote
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1436,6 +1642,7 @@ function GameTable({
               {!game.log.some((entry) => logFilter === "all" || getLogCategory(entry.text) === logFilter) && <p className="empty-note">No {logFilter} events yet.</p>}
             </div>
           </section>
+          </div>
         </aside>
       </div>
     </main>

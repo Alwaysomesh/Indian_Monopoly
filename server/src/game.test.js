@@ -6,6 +6,7 @@ import {
   advanceTimedOutPlayer,
   BOARD,
   createGame,
+  eliminatePlayerByVote,
   expireTradeOffer,
   finishTimedGame,
   MAX_PLAYERS,
@@ -899,4 +900,53 @@ test("an auction with no bids leaves the property unowned", () => {
 
   assert.equal(game.properties.dharavi.ownerId, null);
   assert.equal(game.phase, "end-turn");
+});
+
+test("vote-kick returns a player's assets to the bank and skips their turn", () => {
+  const players = [...lobby, { id: "player-three", name: "Meera", connected: true }];
+  const game = createGame("TEST01", players);
+  const target = game.players[0];
+  target.propertyIds = ["dharavi"];
+  target.cash = 900;
+  game.properties.dharavi.ownerId = target.id;
+  game.properties.dharavi.houses = 2;
+  game.properties.dharavi.mortgaged = true;
+  game.trades.push({
+    id: "trade-1",
+    fromPlayerId: target.id,
+    toPlayerId: "player-two",
+    status: "pending",
+  });
+
+  eliminatePlayerByVote(game, target.id);
+
+  assert.equal(target.bankrupt, true);
+  assert.equal(target.cash, 0);
+  assert.deepEqual(target.propertyIds, []);
+  assert.equal(game.properties.dharavi.ownerId, null);
+  assert.equal(game.properties.dharavi.houses, 0);
+  assert.equal(game.properties.dharavi.mortgaged, false);
+  assert.equal(game.trades[0].status, "cancelled");
+  assert.equal(game.players[game.currentPlayerIndex].id, "player-two");
+  assert.equal(game.phase, "rolling");
+  assert.match(game.log[0].text, /was voted out/);
+});
+
+test("vote-kicking the current debtor clears their debt and advances the turn", () => {
+  const players = [...lobby, { id: "player-three", name: "Meera", connected: true }];
+  const game = createGame("TEST01", players);
+  game.phase = "debt";
+  game.debt = {
+    debtorId: "player-one",
+    creditorId: null,
+    amount: 500,
+    reason: "a card",
+    resumePhase: "end-turn",
+  };
+
+  eliminatePlayerByVote(game, "player-one");
+
+  assert.equal(game.debt, null);
+  assert.equal(game.phase, "rolling");
+  assert.equal(game.players[game.currentPlayerIndex].id, "player-two");
 });

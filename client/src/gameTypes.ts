@@ -117,6 +117,16 @@ export interface PublicRoom {
   rules: GameRules;
   sarkariNeelamiCustomized: boolean;
   players: Array<{ id: string; name: string; connected: boolean }>;
+  voteKick: {
+    targetPlayerId: string;
+    targetName: string;
+    voterIds: string[];
+    votes: Record<string, boolean>;
+    requiredVotes: number;
+    yesVotes: number;
+    noVotes: number;
+  } | null;
+  voteKickMessage: string | null;
   maxPlayers: number;
 }
 
