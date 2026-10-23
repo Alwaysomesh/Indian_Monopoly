@@ -42,12 +42,12 @@ button { cursor: pointer; }
 .connection i { width: 7px; height: 7px; border-radius: 50%; background: #b6aa96; }
 .connection.online i { background: #4b8c63; box-shadow: 0 0 0 3px rgba(75, 140, 99, .14); }
 
-.hero { display: grid; grid-template-columns: minmax(0, 1fr) 405px; gap: 8%; align-items: center; max-width: 1160px; min-height: calc(100vh - 158px); margin: 0 auto; padding: 50px 0 66px; }
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) 405px; gap: 8%; align-items: center; max-width: 1160px; min-height: calc(100vh - 158px); margin: 0 auto; padding: 38px 0 44px; }
 .hero-copy { max-width: 540px; }
 .eyebrow { margin: 0 0 18px; color: #bd7135; font-size: 10px; font-weight: 700; letter-spacing: .19em; }
 h1 { margin: 0; color: #263b2e; font-family: "Playfair Display", Georgia, serif; font-size: clamp(56px, 7vw, 86px); font-weight: 600; letter-spacing: -.055em; line-height: .99; }
 h1 em { color: #c8793b; font-weight: 600; }
-.subtitle { max-width: 430px; margin: 25px 0 26px; color: #74746a; font-size: 15px; line-height: 1.8; }
+.subtitle { max-width: 430px; margin: 19px 0 20px; color: #74746a; font-size: 15px; line-height: 1.7; }
 .features { display: flex; flex-wrap: wrap; gap: 9px; }
 .features span { padding: 9px 12px; border: 1px solid rgba(41, 62, 45, .13); border-radius: 20px; color: #596657; font-size: 11px; }
 
@@ -72,9 +72,18 @@ input::placeholder { color: #aaa99f; }
 .secondary-button { min-width: 76px; padding: 0 17px; background: #eee9dc; color: #425444; }
 .secondary-button:hover { background: #e6dfcf; }
 .error-message { margin: 12px 0 0; color: #a44936; font-size: 12px; line-height: 1.5; }
+.invite-hint { margin: -12px 0 16px; color: #54714f; font-size: 12px; line-height: 1.5; }
+.name-requirement { margin: 5px 0 0; color: #6e6a5e; font-size: 10px; line-height: 1.4; }
+label span { color: #a44936; font-size: 10px; font-weight: 500; }
 
 .lobby-label { margin: 0; color: #969486; font-size: 9px; font-weight: 700; letter-spacing: .12em; }
 .room-code { margin: 8px 0 4px; color: #c8793b; font-family: "Playfair Display", Georgia, serif; font-size: 45px; font-weight: 700; letter-spacing: .17em; }
+.invite-link-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0 5px; }
+.invite-link-row input { grid-column: 1 / -1; min-width: 0; height: 40px; padding: 0 9px; font-size: 10px; }
+.invite-link-row .secondary-button { display: flex; min-width: 0; align-items: center; justify-content: center; height: 40px; padding: 0 8px; white-space: nowrap; text-decoration: none; }
+.invite-link-row .whatsapp-button { background: #e4f0e4; color: #276341; }
+.invite-link-row .whatsapp-button:hover { background: #d5e9d5; }
+.invite-status { margin: 5px 0 10px; color: #54714f; font-size: 10px; }
 .player-count { margin: 0 0 15px; color: #828276; font-size: 11px; }
 .player-list { display: grid; gap: 9px; margin: 0; padding: 15px 0; border-top: 1px solid #eeece4; list-style: none; }
 .player-list li { display: flex; align-items: center; gap: 9px; color: #39483b; font-size: 13px; }
@@ -100,10 +109,10 @@ footer b { color: #c8793b; }
 
 @media (max-width: 800px) {
   .page-shell { padding: 0 6%; }
-  .hero { grid-template-columns: 1fr; gap: 38px; max-width: 520px; padding: 62px 0 48px; }
+  .hero { grid-template-columns: 1fr; gap: 22px; max-width: 520px; min-height: 0; padding: 30px 0 34px; }
   .hero-copy { max-width: 100%; }
-  h1 { font-size: clamp(56px, 13vw, 76px); }
-  .join-card { padding: 26px; }
+  h1 { font-size: clamp(52px, 10vw, 66px); }
+  .join-card { padding: 24px; }
 }
 
 @media (max-width: 420px) {
@@ -117,10 +126,10 @@ footer b { color: #c8793b; }
 @media (max-width: 500px) {
   .page-shell { padding-right: max(5%, env(safe-area-inset-right)); padding-left: max(5%, env(safe-area-inset-left)); }
   .topbar { height: 68px; }
-  .hero { min-height: 0; gap: 28px; padding: 38px 0 32px; }
+  .hero { min-height: 0; gap: 18px; padding: 24px 0 26px; }
   h1 { font-size: clamp(44px, 12vw, 58px); }
-  .subtitle { margin: 18px 0 20px; font-size: 14px; line-height: 1.65; }
-  .join-card { padding: 21px; }
+  .subtitle { margin: 14px 0 15px; font-size: 14px; line-height: 1.55; }
+  .join-card { padding: 19px; }
   .join-card input, .join-card button { min-height: 46px; }
   .room-code { font-size: clamp(36px, 12vw, 45px); }
   footer { flex-direction: column; gap: 7px; padding: 14px 0 max(16px, env(safe-area-inset-bottom)); }

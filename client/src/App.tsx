@@ -109,22 +109,39 @@ function getLeaders(players: GameState["players"], score: (player: GameState["pl
 }
 
 export default function App() {
+  const inviteParam = new URLSearchParams(window.location.search).get("room")?.trim();
+  const inviteCode = inviteParam && /^[\da-f]{6}$/i.test(inviteParam) ? inviteParam.toUpperCase() : "";
   const [playerName, setPlayerName] = useState(
     sessionStorage.getItem("monopoly.player-name") ?? localStorage.getItem("monopoly.player-name") ?? "",
   );
-  const [roomCodeInput, setRoomCodeInput] = useState("");
+  const [roomCodeInput, setRoomCodeInput] = useState(() => inviteCode);
   const [room, setRoom] = useState<PublicRoom | null>(null);
   const [game, setGame] = useState<GameState | null>(null);
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState("");
+  const [inviteStatus, setInviteStatus] = useState("");
   const [playerId] = useState(getSessionPlayerId);
+
+  const inviteUrl = room
+    ? (() => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("room", room.code);
+        url.hash = "";
+        return url.toString();
+      })()
+    : "";
+  const whatsappInviteUrl = room
+    ? `https://wa.me/?${new URLSearchParams({
+        text: `Join my Monopoly India game (room ${room.code}): ${inviteUrl}`,
+      })}`
+    : "";
 
   useEffect(() => {
     const onConnect = () => {
       setConnected(true);
       const savedCode = sessionStorage.getItem("monopoly.room-code") ?? localStorage.getItem("monopoly.room-code");
       const savedName = sessionStorage.getItem("monopoly.player-name") ?? localStorage.getItem("monopoly.player-name");
-      if (savedCode && savedName) {
+      if (savedCode && savedName && (!inviteCode || savedCode === inviteCode)) {
         socket.emit("room:join", {
           roomCode: savedCode,
           playerName: savedName,
@@ -202,6 +219,15 @@ export default function App() {
       socket.emit("room:create", { playerName: name, playerId }, saveMembership);
     } else {
       socket.emit("room:join", { playerName: name, roomCode: roomCodeInput, playerId }, saveMembership);
+    }
+  }
+
+  async function copyInviteLink() {
+    try {
+      await navigator.clipboard.writeText(inviteUrl);
+      setInviteStatus("Invite link copied!");
+    } catch {
+      setInviteStatus("Could not copy the link. Select and copy it manually.");
     }
   }
 
@@ -329,17 +355,25 @@ export default function App() {
           </div>
           {!room ? (
             <>
-              <label htmlFor="player-name">Your player name</label>
+              {roomCodeInput && (
+                <p className="invite-hint">You’re invited! Enter your name to join room {roomCodeInput}.</p>
+              )}
+              <label htmlFor="player-name">Your player name <span>(required)</span></label>
               <input
+                aria-describedby="player-name-hint"
                 id="player-name"
                 maxLength={20}
                 onChange={(event) => setPlayerName(event.target.value)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter") enterRoom("create");
+                  if (event.key === "Enter") enterRoom(roomCodeInput ? "join" : "create");
                 }}
                 placeholder="e.g. Riya"
+                required
                 value={playerName}
               />
+              <p className="name-requirement" id="player-name-hint">
+                Required before creating or joining a room.
+              </p>
               <button className="primary-button" onClick={() => enterRoom("create")}>
                 Create a private room <span>→</span>
               </button>
@@ -363,6 +397,21 @@ export default function App() {
             <div className="lobby">
               <p className="lobby-label">SHARE THIS CODE WITH YOUR FRIENDS</p>
               <div className="room-code">{room.code}</div>
+              <div className="invite-link-row">
+                <input aria-label="Invite link" readOnly value={inviteUrl} />
+                <button className="secondary-button" onClick={copyInviteLink} type="button">
+                  Copy link
+                </button>
+                <a
+                  className="secondary-button whatsapp-button"
+                  href={whatsappInviteUrl}
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Share on WhatsApp
+                </a>
+              </div>
+              {inviteStatus && <p className="invite-status" role="status">{inviteStatus}</p>}
               <p className="player-count">
                 {room.players.length} human{room.players.length === 1 ? "" : "s"} + {room.rules.botCount} bots / {room.maxPlayers} seats
               </p>
