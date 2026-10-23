@@ -614,6 +614,137 @@ footer b { color: #c8793b; }
   .theme-dark .mobile-game-nav button.selected-mobile-view { background: #35463b; color: #ecf2e8; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .space-tokens i.is-your-piece { animation: none; }
+.board-center {
+  position: relative;
+  gap: clamp(8px, 1.4vw, 18px);
+  padding: clamp(14px, 3vw, 36px);
+  isolation: isolate;
+}
+.board-center::before {
+  position: absolute;
+  z-index: -1;
+  color: #168a65;
+  content: "MONOPOLY INDIA";
+  font-size: clamp(28px, 7.5vw, 100px);
+  font-weight: 700;
+  letter-spacing: .06em;
+  opacity: .055;
+  pointer-events: none;
+  transform: rotate(-12deg);
+  white-space: nowrap;
+}
+.board-subtitle { margin: 0; color: #168a65; font-size: clamp(9px, 1vw, 12px); font-style: normal; font-weight: 800; letter-spacing: .16em; }
+.center-turn {
+  max-width: 100%;
+  margin: 0;
+  padding: clamp(8px, 1vw, 12px) clamp(12px, 2vw, 24px);
+  border: 1px solid rgba(37, 87, 68, .2);
+  border-radius: 999px;
+  background: linear-gradient(120deg, rgba(23, 160, 104, .13), rgba(48, 112, 220, .1), rgba(244, 191, 47, .15));
+  color: #294733;
+  font-size: clamp(11px, 1.35vw, 18px);
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+.center-turn.center-my-turn {
+  border-color: rgba(10, 141, 89, .42);
+  background: linear-gradient(115deg, #14985f, #2485c4 58%, #e9ad24);
+  box-shadow: 0 7px 24px rgba(22, 142, 96, .24), 0 0 24px rgba(37, 126, 190, .18);
+  color: white;
+  text-shadow: 0 1px 4px rgba(17, 57, 43, .3);
+}
+.center-dice {
+  display: flex;
+  align-items: center;
+  gap: clamp(7px, 1vw, 14px);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #eb6251;
+  font-size: clamp(12px, 1.2vw, 18px);
+}
+.die-face {
+  display: grid;
+  width: clamp(34px, 4.6vw, 58px);
+  aspect-ratio: 1;
+  place-items: center;
+  border: 2px solid rgba(42, 81, 100, .2);
+  border-radius: clamp(8px, 1vw, 13px);
+  background: linear-gradient(145deg, #fff, #e8f5f1);
+  box-shadow: 0 5px 12px rgba(36, 71, 75, .18), inset 0 1px 1px white;
+  color: #245c82;
+  font-size: clamp(18px, 2.3vw, 30px);
+  font-weight: 800;
+}
+.center-dice b { color: #e65e4e; }
+.center-dice.is-rolling .die-face { animation: center-dice-roll .9s cubic-bezier(.22,.8,.25,1) both; }
+.center-dice.is-rolling .die-face + b + .die-face { animation-delay: .08s; }
+.center-caption { margin: 0; color: #66786c; font-size: clamp(8px, .75vw, 10px); font-weight: 800; letter-spacing: .13em; }
+.board-wrap { width: min(97vw, calc(100dvh - 250px), 1100px); }
+.board-grid { background: #e7f3e9; }
+.space-label { font-size: clamp(7px, .92vw, 12px); line-height: 1.12; -webkit-line-clamp: 4; }
+.color-brown { background: #9b5a3c; }.color-lightBlue { background: #35b9d0; }.color-pink { background: #e8428a; }.color-orange { background: #ff8838; }.color-red { background: #ef4138; }.color-yellow { background: #f0c928; }.color-green { background: #1ca469; }.color-darkBlue { background: #345ccb; }.color-railroad { background: #293c4f; }.color-utility { background: #e2a522; }
+.space-tokens i.is-your-piece {
+  position: relative;
+  z-index: 5;
+  display: inline-grid;
+  width: clamp(24px, 2.5vw, 36px);
+  height: clamp(24px, 2.5vw, 36px);
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 25%, #ffe27a 68%, #ff9e37);
+  box-shadow: 0 0 0 2px #ed5544, 0 0 14px 5px rgba(255, 197, 45, .9);
+  color: #263c58;
+  font-size: clamp(16px, 1.75vw, 25px);
+  animation: own-piece-glow 1.35s ease-in-out infinite alternate;
+}
+.space-tokens i.is-active-piece { outline: 2px solid #16b7ca; outline-offset: 2px; }
+.board-space.has-my-piece {
+  z-index: 3;
+  overflow: visible;
+  box-shadow: inset 0 0 0 2px white, 0 0 0 2px #ed5544, 0 0 20px rgba(255, 173, 39, .72);
+}
+.motion-enabled .action-panel .roll-button {
+  background: linear-gradient(110deg, #087d67, #237ad0 38%, #e3424b 70%, #e2ae1c);
+  background-size: 220% 100%;
+  box-shadow: 0 5px 18px rgba(34, 121, 163, .34);
+  animation: roll-energy 2s ease-in-out infinite;
+}
+.motion-enabled .action-panel .roll-button:hover { box-shadow: 0 7px 24px rgba(34, 121, 163, .5); }
+.theme-dark .board-grid { background: #1d2b2e; }
+.theme-dark .board-center::before { color: #5ad7b0; }
+.theme-dark .board-subtitle, .theme-dark .center-caption { color: #a7d6c4; }
+.theme-dark .center-turn { border-color: #506b68; background: linear-gradient(120deg, rgba(23, 160, 104, .2), rgba(48, 112, 220, .18), rgba(244, 191, 47, .18)); color: #e3f0e8; }
+.theme-dark .center-turn.center-my-turn { background: linear-gradient(115deg, #087d54, #246bb1 58%, #b77d14); color: white; }
+.theme-dark .die-face { border-color: #546d71; background: linear-gradient(145deg, #edf5ee, #bdd7d5); color: #183e59; }
+.theme-dark .board-space.has-my-piece { box-shadow: inset 0 0 0 2px white, 0 0 0 2px #ed5544, 0 0 20px rgba(255, 173, 39, .72); }
+.spotify-playlist { display: grid; gap: 9px; }
+.spotify-playlist > strong { color: #294733; font-size: 12px; }
+.spotify-playlist iframe { display: block; width: 100%; height: 352px; border: 0; border-radius: 12px; }
+.theme-dark .spotify-playlist > strong { color: #e2e9dc; }
+
+@keyframes center-dice-roll {
+  0% { opacity: .35; transform: translateY(-24px) rotate(-240deg) scale(.45); }
+  65% { opacity: 1; transform: translateY(4px) rotate(18deg) scale(1.13); }
+  82% { transform: translateY(-2px) rotate(-8deg) scale(.98); }
+  100% { transform: translateY(0) rotate(0) scale(1); }
+}
+
+@media (max-width: 760px) {
+  .board-wrap { width: min(100%, 630px, calc(100vw - 24px)); }
+  .space-label { font-size: clamp(7px, 2vw, 9px); -webkit-line-clamp: 4; }
+  .space-tokens i.is-your-piece { width: clamp(22px, 6vw, 30px); height: clamp(22px, 6vw, 30px); font-size: clamp(15px, 4vw, 19px); }
+  .center-turn { font-size: clamp(10px, 3vw, 15px); }
+  .board-subtitle { font-size: clamp(8px, 2.2vw, 11px); }
+  .die-face { width: clamp(30px, 9vw, 42px); }
+  .preferences-card { width: min(480px, 100%); }
+  .game-sidebar .action-panel.property-purchase-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .property-purchase-actions > .panel-kicker,
+  .property-purchase-actions > .action-message { grid-column: 1 / -1; }
+  .property-purchase-actions .panel-kicker { margin-bottom: 0; }
+  .property-purchase-actions .action-message { gap: 2px; margin: 0; font-size: 9px; }
+  .property-purchase-actions .action-message strong { font-size: 14px; }
+  .property-purchase-actions .action-button { min-height: 38px; padding: 6px 3px; font-size: clamp(9px, 2.7vw, 11px); }
+  .property-purchase-actions .secondary-action { margin-top: 0; }
 }

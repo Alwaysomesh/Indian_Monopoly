@@ -618,14 +618,7 @@ function GameTable({
   const [soundEnabled, setSoundEnabled] = useState(() =>
     typeof window.AudioContext !== "undefined" && localStorage.getItem("monopoly.sound-enabled") === "true",
   );
-  const [musicEnabled, setMusicEnabled] = useState(() =>
-    typeof window.AudioContext !== "undefined" && localStorage.getItem("monopoly.music-enabled") === "true",
-  );
-  const [musicReady, setMusicReady] = useState(false);
-  const [musicVolume, setMusicVolume] = useState(() => {
-    const savedVolume = Number(localStorage.getItem("monopoly.music-volume"));
-    return Number.isFinite(savedVolume) && savedVolume >= 0 && savedVolume <= 100 ? savedVolume : 28;
-  });
+  const [diceRolling, setDiceRolling] = useState(false);
   const [drawnCard, setDrawnCard] = useState("");
   const [celebration, setCelebration] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
@@ -633,8 +626,6 @@ function GameTable({
   const [now, setNow] = useState(Date.now());
   const chatMessagesRef = useRef<HTMLDivElement>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
-  const musicTimerRef = useRef<number | null>(null);
-  const musicStepRef = useRef(0);
   const boardSpaceRefs = useRef<Array<HTMLDivElement | null>>([]);
   const previousPositions = useRef<Record<string, number>>({});
   const movementTimers = useRef<number[]>([]);
@@ -672,62 +663,6 @@ function GameTable({
       });
     }
   }, []);
-
-  useEffect(() => {
-    if (!musicEnabled || musicReady || typeof window.AudioContext === "undefined") return;
-    const startAfterGesture = () => {
-      const context = audioContextRef.current ?? new AudioContext();
-      audioContextRef.current = context;
-      void context.resume().then(() => setMusicReady(true)).catch((audioError) => {
-        console.error("Could not resume the game soundtrack:", audioError);
-      });
-    };
-    window.addEventListener("pointerdown", startAfterGesture, { once: true });
-    return () => window.removeEventListener("pointerdown", startAfterGesture);
-  }, [musicEnabled, musicReady]);
-
-  useEffect(() => {
-    if (!musicEnabled || !musicReady || !audioContextRef.current || musicVolume === 0) {
-      if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
-      musicTimerRef.current = null;
-      return;
-    }
-    const context = audioContextRef.current;
-    const melody = [392, 494, 587, 659, 587, 494, 440, 494];
-    musicTimerRef.current = window.setInterval(() => {
-      const step = musicStepRef.current++ % 8;
-      const now = context.currentTime;
-      const gain = context.createGain();
-      gain.gain.setValueAtTime(0.0001, now);
-      gain.gain.exponentialRampToValueAtTime((musicVolume / 100) * 0.035, now + 0.015);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
-      const note = context.createOscillator();
-      note.type = "triangle";
-      note.frequency.value = melody[step];
-      note.connect(gain);
-      gain.connect(context.destination);
-      note.start(now);
-      note.stop(now + 0.21);
-
-      if (step % 2 === 0) {
-        const bass = context.createOscillator();
-        const bassGain = context.createGain();
-        bass.type = "sine";
-        bass.frequency.setValueAtTime(step === 0 ? 110 : 82, now);
-        bass.frequency.exponentialRampToValueAtTime(42, now + 0.12);
-        bassGain.gain.setValueAtTime((musicVolume / 100) * 0.1, now);
-        bassGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.15);
-        bass.connect(bassGain);
-        bassGain.connect(context.destination);
-        bass.start(now);
-        bass.stop(now + 0.16);
-      }
-    }, 250);
-    return () => {
-      if (musicTimerRef.current !== null) window.clearInterval(musicTimerRef.current);
-      musicTimerRef.current = null;
-    };
-  }, [musicEnabled, musicVolume]);
 
   useEffect(() => {
     if (!followPlayerPiece || followedPosition === undefined) return;
@@ -768,6 +703,13 @@ function GameTable({
     if (!cardText) return;
     setDrawnCard(cardText);
     const timeout = window.setTimeout(() => setDrawnCard(""), 3200);
+    return () => window.clearTimeout(timeout);
+  }, [latestLogId]);
+
+  useEffect(() => {
+    if (!/\brolls \d+ \+ \d+/i.test(game.log[0]?.text ?? "")) return;
+    setDiceRolling(true);
+    const timeout = window.setTimeout(() => setDiceRolling(false), 900);
     return () => window.clearTimeout(timeout);
   }, [latestLogId]);
 
@@ -1098,37 +1040,17 @@ function GameTable({
               <span><strong>Sound effects</strong><small>Upbeat cues for dice, purchases, and accepted trades</small></span>
               <input checked={soundEnabled} disabled={typeof window.AudioContext === "undefined"} onChange={(event) => setSoundPreference(event.currentTarget.checked)} type="checkbox" />
             </label>
-            <label className="preference-option">
-              <span><strong>Game soundtrack</strong><small>Original, generated arcade beat · off by default</small></span>
-              <input checked={musicEnabled} disabled={typeof window.AudioContext === "undefined"} onChange={(event) => {
-                const enabled = event.currentTarget.checked;
-                localStorage.setItem("monopoly.music-enabled", String(enabled));
-                setMusicEnabled(enabled);
-                if (enabled) {
-                  const context = audioContextRef.current ?? new AudioContext();
-                  audioContextRef.current = context;
-                  void context.resume().then(() => setMusicReady(true)).catch((audioError) => {
-                    console.error("Could not enable the game soundtrack:", audioError);
-                  });
-                }
-              }} type="checkbox" />
-            </label>
-            <label className="music-volume-option">
-              Music volume
-              <input
-                aria-label="Music volume"
-                max={100}
-                min={0}
-                onChange={(event) => {
-                  const volume = Number(event.currentTarget.value);
-                  localStorage.setItem("monopoly.music-volume", String(volume));
-                  setMusicVolume(volume);
-                }}
-                type="range"
-                value={musicVolume}
+            <div className="spotify-playlist">
+              <strong>Game night playlist</strong>
+              <iframe
+                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                allowFullScreen
+                height="352"
+                loading="lazy"
+                src="https://open.spotify.com/embed/playlist/5ccA40qRl6lY4L5XQksZqD?utm_source=generator&si=156924d2b1944333"
+                title="Monopoly India game night Spotify playlist"
               />
-              <span>{musicVolume}%</span>
-            </label>
+            </div>
             {typeof window.AudioContext === "undefined" && <p className="preference-note">Sound effects are not supported by this browser.</p>}
           </section>
         </div>
@@ -1186,16 +1108,22 @@ function GameTable({
           </div>
           <div className="board-wrap">
             <div className="board-grid">
-              <div className="board-center">
-                <p className="board-ornament">✦ &nbsp; नमस्ते &nbsp; ✦</p>
-                <p className="board-logo">MONOPOLY<br /><em>INDIA</em></p>
+              <div aria-label="Current turn" className={`board-center ${isMyTurn ? "is-my-turn" : ""}`}>
                 <p className="board-subtitle">ROUND {game.roundNumber} · TURN {game.turnNumber}</p>
                 <strong className={`center-turn ${isMyTurn ? "center-my-turn" : ""}`}>
                   {game.phase === "finished"
                     ? `${game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "Nobody"} wins`
                     : isMyTurn ? "YOUR MOVE" : `${currentPlayer?.name ?? "Player"}'s turn`}
                 </strong>
-                <div className="center-dice">{game.dice ? `${game.dice[0]} + ${game.dice[1]}` : "⚄  ⚄"}</div>
+                <div
+                  aria-label={game.dice ? `Dice: ${game.dice[0]} plus ${game.dice[1]}` : "Dice ready"}
+                  className={`center-dice ${diceRolling && motionEnabled ? "is-rolling" : ""}`}
+                  role="img"
+                >
+                  {game.dice
+                    ? <><span className="die-face" key={`center-die-${latestLogId}-1`}>{game.dice[0]}</span><b>+</b><span className="die-face" key={`center-die-${latestLogId}-2`}>{game.dice[1]}</span></>
+                    : <><span className="die-face">⚄</span><b>+</b><span className="die-face">⚄</span></>}
+                </div>
                 <p className="center-caption">
                   {secondsRemaining !== null
                     ? `${secondsRemaining}s to ${game.phase === "rolling" ? "roll" : "act"}`
@@ -1308,7 +1236,7 @@ function GameTable({
         </section>
 
         <aside className="game-sidebar">
-          <section className="action-panel">
+          <section className={`action-panel ${game.phase === "buying" && pendingProperty ? "property-purchase-actions" : ""}`}>
             <p className="panel-kicker">YOUR MOVE</p>
             {game.phase === "finished" ? (
               <div className="action-message">{game.endReason === "time-limit" ? "Time is up! The champion is ranked by cash, then properties." : "The game is over. Thanks for playing!"}</div>
