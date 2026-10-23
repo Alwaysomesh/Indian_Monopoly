@@ -11,6 +11,7 @@ import {
   advanceTimedOutPlayer,
   createGame,
   expireTradeOffer,
+  eliminatePlayerByVote,
   finishTimedGame,
   MAX_PLAYERS,
   performGameAction,
@@ -55,6 +56,13 @@ function createRoomCode() {
 }
 
 function publicRoom(room) {
+  const voteKick = room.voteKick;
+  const activeVoters = voteKick
+    ? voteKick.voterIds.filter((id) =>
+      room.players.get(id)?.connected !== false &&
+      room.game?.players.some((player) => player.id === id && player.connected && !player.bankrupt && !player.isAiBot),
+    )
+    : [];
   return {
     code: room.code,
     hostId: room.hostId,
@@ -62,11 +70,46 @@ function publicRoom(room) {
     rules: room.rules,
     sarkariNeelamiCustomized: room.sarkariNeelamiCustomized,
     players: [...room.players.values()].map(({ id, name, connected }) => ({ id, name, connected })),
+    voteKick: voteKick ? {
+      targetPlayerId: voteKick.targetPlayerId,
+      targetName: voteKick.targetName,
+      voterIds: activeVoters,
+      votes: Object.fromEntries(activeVoters.filter((id) => id in voteKick.votes).map((id) => [id, voteKick.votes[id]])),
+      requiredVotes: Math.ceil(activeVoters.length * 2 / 3),
+      yesVotes: activeVoters.filter((id) => voteKick.votes[id] === true).length,
+      noVotes: activeVoters.filter((id) => voteKick.votes[id] === false).length,
+    } : null,
+    voteKickMessage: room.voteKickMessage,
     maxPlayers: MAX_PLAYERS,
   };
 }
 
+function eligibleVoteKickVoters(room, targetPlayerId) {
+  return [...room.players.values()]
+    .filter((roomPlayer) => roomPlayer.connected &&
+      room.game?.players.some((player) =>
+        player.id === roomPlayer.id && player.connected && !player.bankrupt && !player.isAiBot,
+      ) &&
+      roomPlayer.id !== targetPlayerId)
+    .map((player) => player.id);
+}
+
+function removeKickedPlayerFromRoom(room, playerId) {
+  for (const memberSocket of io.sockets.sockets.values()) {
+    if (memberSocket.data.roomCode === room.code && memberSocket.data.playerId === playerId) {
+      memberSocket.emit("room:kicked");
+      memberSocket.leave(room.code);
+      memberSocket.data.roomCode = undefined;
+      memberSocket.data.playerId = undefined;
+    }
+  }
+}
+
 function broadcastRoom(room) {
+  if (room.game?.phase === "finished" && room.voteKick) {
+    room.voteKick = null;
+    room.voteKickMessage = "The vote was canceled because the game has finished.";
+  }
   scheduleOfflineAction(room);
   scheduleBotTradeReplies(room);
   scheduleTradeExpirations(room);
@@ -332,6 +375,9 @@ io.on("connection", (socket) => {
       sarkariNeelamiCustomized: false,
       players: new Map(),
       kickedPlayerIds: new Set(),
+      voteKick: null,
+      voteKickMessage: null,
+      voteKickCooldowns: new Map(),
       game: null,
       offlineActionTimer: null,
       offlineActionKey: null,
@@ -462,14 +508,112 @@ io.on("connection", (socket) => {
     room.players.delete(targetPlayerId);
     updateAutomaticSarkariSetting(room);
     room.kickedPlayerIds.add(targetPlayerId);
-    for (const memberSocket of io.sockets.sockets.values()) {
-      if (memberSocket.data.roomCode === room.code && memberSocket.data.playerId === targetPlayerId) {
-        memberSocket.emit("room:kicked");
-        memberSocket.leave(room.code);
-        memberSocket.data.roomCode = undefined;
-        memberSocket.data.playerId = undefined;
-      }
+    removeKickedPlayerFromRoom(room, targetPlayerId);
+    acknowledge(ack, { ok: true });
+    broadcastRoom(room);
+  });
+
+  socket.on("game:vote-kick", ({ targetPlayerId } = {}, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    const voter = room?.game?.players.find((player) => player.id === playerId);
+    const target = room?.game?.players.find((player) => player.id === targetPlayerId);
+    if (!room?.game || room.game.phase === "finished" || !voter || voter.bankrupt || voter.isAiBot) {
+      acknowledge(ack, { ok: false, error: "Only active human players can start a vote during a live game." });
+      return;
     }
+    if (room.voteKick) {
+      acknowledge(ack, { ok: false, error: "A vote is already in progress." });
+      return;
+    }
+    if (typeof targetPlayerId !== "string" || targetPlayerId === playerId ||
+        !target || target.bankrupt || target.isAiBot || !target.connected) {
+      acknowledge(ack, { ok: false, error: "Choose another connected human player who is still in the game." });
+      return;
+    }
+    const voters = eligibleVoteKickVoters(room, targetPlayerId);
+    if (voters.length < 3) {
+      acknowledge(ack, { ok: false, error: "A vote needs at least three connected human voters besides its target." });
+      return;
+    }
+    const cooldownUntil = room.voteKickCooldowns.get(targetPlayerId) ?? 0;
+    if (Date.now() < cooldownUntil) {
+      acknowledge(ack, { ok: false, error: "A vote against this player was recently closed. Please wait before trying again." });
+      return;
+    }
+    room.voteKick = {
+      targetPlayerId,
+      targetName: target.name,
+      voterIds: voters,
+      votes: { [playerId]: true },
+    };
+    room.voteKickMessage = null;
+    acknowledge(ack, { ok: true });
+    broadcastRoom(room);
+  });
+
+  socket.on("game:vote-kick-cast", ({ approve } = {}, ack) => {
+    const room = rooms.get(socket.data.roomCode);
+    const playerId = socket.data.playerId;
+    const vote = room?.voteKick;
+    if (!room?.game || room.game.phase === "finished" || !vote) {
+      acknowledge(ack, { ok: false, error: "There is no vote in progress." });
+      return;
+    }
+    if (typeof approve !== "boolean") {
+      acknowledge(ack, { ok: false, error: "Choose approve or reject for this vote." });
+      return;
+    }
+    const voterIds = eligibleVoteKickVoters(room, vote.targetPlayerId)
+      .filter((id) => vote.voterIds.includes(id));
+    if (voterIds.length < 3) {
+      room.voteKick = null;
+      room.voteKickMessage = "Vote canceled: at least three connected human voters besides the target are required.";
+      acknowledge(ack, { ok: false, error: room.voteKickMessage });
+      broadcastRoom(room);
+      return;
+    }
+    if (!voterIds.includes(playerId) || playerId === vote.targetPlayerId) {
+      acknowledge(ack, { ok: false, error: "You are not eligible to vote in this poll." });
+      return;
+    }
+    if (playerId in vote.votes) {
+      acknowledge(ack, { ok: false, error: "Your vote has already been recorded." });
+      return;
+    }
+    vote.voterIds = voterIds;
+    vote.votes[playerId] = approve;
+    const requiredVotes = Math.ceil(voterIds.length * 2 / 3);
+    const yesVotes = voterIds.filter((id) => vote.votes[id] === true).length;
+    const noVotes = voterIds.filter((id) => vote.votes[id] === false).length;
+
+    if (yesVotes >= requiredVotes) {
+      const target = room.game.players.find((player) => player.id === vote.targetPlayerId);
+      try {
+        eliminatePlayerByVote(room.game, vote.targetPlayerId);
+      } catch (error) {
+        room.voteKick = null;
+        room.voteKickMessage = error.message || "The vote could not remove that player.";
+        acknowledge(ack, { ok: false, error: error.message || "The player could not be removed." });
+        broadcastRoom(room);
+        return;
+      }
+      room.players.delete(vote.targetPlayerId);
+      room.kickedPlayerIds.add(vote.targetPlayerId);
+      if (room.hostId === vote.targetPlayerId) {
+        room.hostId = [...room.players.keys()][0] ?? null;
+      }
+      room.voteKickMessage = `${target?.name ?? "The player"} was voted out. Their properties returned to the bank.`;
+      room.voteKickCooldowns.set(vote.targetPlayerId, Date.now() + 60_000);
+      room.voteKick = null;
+      updateAutomaticSarkariSetting(room);
+      removeKickedPlayerFromRoom(room, vote.targetPlayerId);
+    } else if (noVotes > voterIds.length - requiredVotes) {
+      room.voteKickMessage = `Vote failed: ${noVotes} of ${voterIds.length} eligible voters rejected removing ${vote.targetName}.`;
+      room.voteKickCooldowns.set(vote.targetPlayerId, Date.now() + 60_000);
+      room.voteKick = null;
+    }
+
     acknowledge(ack, { ok: true });
     broadcastRoom(room);
   });
@@ -517,6 +661,9 @@ io.on("connection", (socket) => {
       for (const timer of room.aiTradeTimers.values()) clearTimeout(timer);
       room.aiTradeTimers.clear();
       room.offlineSince.clear();
+      room.voteKick = null;
+      room.voteKickMessage = null;
+      room.voteKickCooldowns.clear();
       room.game = nextGame;
       acknowledge(ack, { ok: true, room: publicRoom(room), game: publicGame(room.game) });
       broadcastRoom(room);
