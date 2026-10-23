@@ -28,7 +28,7 @@ const DEADLINE_ACTIONS = new Set([
   "auction-pass", "end-turn", "mortgage", "unmortgage", "build",
   "sell-house", "declare-bankrupt",
 ]);
-const rooms = new Map();
+export const rooms = new Map();
 const app = express();
 const httpServer = createServer(app);
 const clientOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
@@ -38,6 +38,7 @@ const clientOrigins = (process.env.CLIENT_ORIGIN ?? "http://localhost:5173")
 const io = new Server(httpServer, {
   cors: { origin: clientOrigins, methods: ["GET", "POST"] },
 });
+export { httpServer, io };
 const clientDist = resolve(dirname(fileURLToPath(import.meta.url)), "../../client/dist");
 
 app.get("/health", (_request, response) => response.json({ status: "ok" }));
@@ -699,6 +700,8 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => leaveCurrentRoom(socket));
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`Monopoly India server listening on port ${PORT}`);
-});
+if (process.env.NODE_ENV !== "test") {
+  httpServer.listen(PORT, () => {
+    console.log(`Monopoly India server listening on port ${PORT}`);
+  });
+}

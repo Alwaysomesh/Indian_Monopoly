@@ -33,7 +33,7 @@ npm install
 npm run dev
 ```
 
-Vite serves the client on port 5173 and proxies Socket.IO to the Express server on port 3001. `npm run build` runs the game-engine tests before building the client.
+Vite serves the client on port 5173 and proxies Socket.IO to the Express server on port 3001. `npm test` runs the game-engine tests and a two-client Socket.IO integration test covering room startup, synchronized auction bidding and passing, chat, and rejected, countered, and accepted trades. `npm run build` runs the tests before building the client.
 
 ## Deployment
 
