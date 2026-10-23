@@ -669,6 +669,7 @@ function GameTable({
   const [diceRolling, setDiceRolling] = useState(false);
   const [drawnCard, setDrawnCard] = useState("");
   const [celebration, setCelebration] = useState("");
+  const [recentlyClaimedPropertyId, setRecentlyClaimedPropertyId] = useState("");
   const [recapStatus, setRecapStatus] = useState("");
   const [selectedPropertyId, setSelectedPropertyId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
@@ -731,6 +732,22 @@ function GameTable({
     if (!/\brolls \d+ \+ \d+/i.test(game.log[0]?.text ?? "")) return;
     setDiceRolling(true);
     const timeout = window.setTimeout(() => setDiceRolling(false), 900);
+    return () => window.clearTimeout(timeout);
+  }, [latestLogId]);
+
+  useEffect(() => {
+    const text = game.log[0]?.text ?? "";
+    const buyer = game.players.find((player) => text.startsWith(`${player.name} buys `));
+    const purchased = buyer && Object.values(game.properties).find((property) =>
+      text.includes(` buys ${property.name} for `),
+    );
+    if (!purchased) {
+      setRecentlyClaimedPropertyId("");
+      return;
+    }
+
+    setRecentlyClaimedPropertyId(purchased.id);
+    const timeout = window.setTimeout(() => setRecentlyClaimedPropertyId(""), 1600);
     return () => window.clearTimeout(timeout);
   }, [latestLogId]);
 
@@ -1234,7 +1251,7 @@ function GameTable({
                 const position = spacePosition(index);
                 return (
                   <div
-                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? "property-space" : ""} ${property?.mortgaged ? "is-mortgaged" : ""} ${occupants.some((player) => player.id === playerId) ? "has-my-piece" : ""}`}
+                    className={`board-space space-${space.type} space-${index < 10 ? "bottom" : index < 20 ? "left" : index < 30 ? "top" : "right"} ${index % 10 === 0 ? "board-corner" : ""} ${property ? `property-space group-${property.group}` : ""} ${property?.id === recentlyClaimedPropertyId ? "is-newly-claimed" : ""} ${property?.mortgaged ? "is-mortgaged" : ""} ${occupants.some((player) => player.id === playerId) ? "has-my-piece" : ""}`}
                     key={space.id}
                     ref={(element) => { boardSpaceRefs.current[index] = element; }}
                     onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
