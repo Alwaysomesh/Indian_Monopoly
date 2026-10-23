@@ -601,7 +601,6 @@ function GameTable({
   const [tradeError, setTradeError] = useState("");
   const [showTradeDialog, setShowTradeDialog] = useState(false);
   const [counteringTradeId, setCounteringTradeId] = useState<string | null>(null);
-  const [followPlayerPiece, setFollowPlayerPiece] = useState(true);
   const [tab, setTab] = useState<"properties" | "trade" | "chat">("properties");
   const [mobileView, setMobileView] = useState<MobileGameView>("board");
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -644,10 +643,10 @@ function GameTable({
   const selectedHouseCost = selectedProperty?.houseCost ? selectedProperty.houseCost * (game.seasonEvent?.id === "construction-boom" ? 2 : 1) : 0;
   const selectedRentRelief = game.seasonEvent?.id === "rent-relief" ? 0.5 : 1;
   const selectedPendingPurchase = selectedProperty && game.phase === "buying" && isMyTurn && game.pendingPurchase?.propertyId === selectedProperty.id;
-  const followedPosition = visualPositions[playerId] ?? me?.position;
-  const followedSpace = followedPosition === undefined ? undefined : game.board[followedPosition];
-  const followedProperty = getPropertyForSpace(game, followedSpace?.propertyId);
-  const followedPositionLabel = followedProperty?.name ?? followedSpace?.label ?? "the board";
+  const playerPosition = visualPositions[playerId] ?? me?.position;
+  const playerSpace = playerPosition === undefined ? undefined : game.board[playerPosition];
+  const playerProperty = getPropertyForSpace(game, playerSpace?.propertyId);
+  const playerPositionLabel = playerProperty?.name ?? playerSpace?.label ?? "the board";
   const secondsRemaining = game.deadlineAt ? Math.max(0, Math.ceil((game.deadlineAt - now) / 1000)) : null;
   const gameSecondsRemaining = game.gameEndsAt ? Math.max(0, Math.ceil((game.gameEndsAt - now) / 1000)) : null;
 
@@ -662,33 +661,6 @@ function GameTable({
         console.error("Could not close the game audio context:", audioError);
       });
     }
-  }, []);
-
-  useEffect(() => {
-    if (!followPlayerPiece || followedPosition === undefined) return;
-    const boardSpace = boardSpaceRefs.current[followedPosition];
-    if (!boardSpace) return;
-    const frame = window.requestAnimationFrame(() =>
-      boardSpace.scrollIntoView({ behavior: motionEnabled ? "smooth" : "auto", block: "center", inline: "center" }),
-    );
-    return () => window.cancelAnimationFrame(frame);
-  }, [followPlayerPiece, followedPosition, isMyTurn, motionEnabled]);
-
-  useEffect(() => {
-    const pauseFollowing = () => setFollowPlayerPiece(false);
-    const pauseForScrollKey = (event: KeyboardEvent) => {
-      if (!["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) return;
-      if (event.target instanceof HTMLElement && event.target.closest("input, select, textarea, button, [contenteditable=true]")) return;
-      pauseFollowing();
-    };
-    window.addEventListener("wheel", pauseFollowing, { passive: true });
-    window.addEventListener("touchmove", pauseFollowing, { passive: true });
-    window.addEventListener("keydown", pauseForScrollKey);
-    return () => {
-      window.removeEventListener("wheel", pauseFollowing);
-      window.removeEventListener("touchmove", pauseFollowing);
-      window.removeEventListener("keydown", pauseForScrollKey);
-    };
   }, []);
 
   useEffect(() => {
@@ -874,7 +846,6 @@ function GameTable({
 
   function showPropertyOnBoard(propertyId: string) {
     const boardIndex = game.board.findIndex((space) => space.propertyId === propertyId);
-    setFollowPlayerPiece(false);
     setSelectedPropertyId(propertyId);
     setMobileView("board");
     if (boardIndex < 0) return;
@@ -972,13 +943,6 @@ function GameTable({
           <div className="table-quick-tools">
             <button className="quiet-button" onClick={() => setShowHelp(true)}>How to play</button>
             <button className="quiet-button" onClick={() => setShowPreferences(true)}>Sound & motion</button>
-            <button
-              aria-pressed={followPlayerPiece}
-              className="quiet-button follow-toggle"
-              onClick={() => setFollowPlayerPiece((following) => !following)}
-            >
-              {followPlayerPiece ? "Follow on" : "Follow off"}
-            </button>
             <button
               aria-pressed={darkMode}
               className="quiet-button theme-toggle"
@@ -1101,10 +1065,7 @@ function GameTable({
           {game.seasonEvent && <div className="season-event" role="status"><small>ROUND {game.roundNumber} · SPECIAL SEASON</small><strong>{game.seasonEvent.title}</strong><span>{game.seasonEvent.description}</span></div>}
           {error && <p className="game-error" role="alert">{error}</p>}
           <div className="board-tools">
-            <span aria-live="polite">Your piece: <strong>{followedPositionLabel}</strong></span>
-            <button aria-pressed={followPlayerPiece} onClick={() => setFollowPlayerPiece((following) => !following)}>
-              {followPlayerPiece ? "Pause following" : "Follow my piece"}
-            </button>
+            <span aria-live="polite">Your piece: <strong>{playerPositionLabel}</strong></span>
           </div>
           <div className="board-wrap">
             <div className="board-grid">
@@ -1113,7 +1074,7 @@ function GameTable({
                 <strong className={`center-turn ${isMyTurn ? "center-my-turn" : ""}`}>
                   {game.phase === "finished"
                     ? `${game.players.find((player) => player.id === game.winnerPlayerId)?.name ?? "Nobody"} wins`
-                    : isMyTurn ? "YOUR MOVE" : `${currentPlayer?.name ?? "Player"}'s turn`}
+                    : isMyTurn ? "Your turn" : `${currentPlayer?.name ?? "Player"}'s turn`}
                 </strong>
                 <div
                   aria-label={game.dice ? `Dice: ${game.dice[0]} plus ${game.dice[1]}` : "Dice ready"}
@@ -1129,6 +1090,90 @@ function GameTable({
                     ? `${secondsRemaining}s to ${game.phase === "rolling" ? "roll" : "act"}`
                     : game.canRollAgain && isMyTurn ? "DOUBLES! ROLL AGAIN" : "THE CITY IS YOURS"}
                 </p>
+                <section className={`action-panel ${game.phase === "buying" && pendingProperty ? "property-purchase-actions" : ""}`}>
+                  <p className="panel-kicker">YOUR MOVE</p>
+                  {game.phase === "finished" ? (
+                    <div className="action-message">{game.endReason === "time-limit" ? "Time is up! The champion is ranked by cash, then properties." : "The game is over. Thanks for playing!"}</div>
+                  ) : owedByMe ? (
+                    <>
+                      <div className="action-message debt-message">
+                        <strong>{formatMoney(game.debt?.amount ?? 0)} due</strong>
+                        <span>{game.debt?.reason}. Mortgage properties or sell buildings to raise cash.</span>
+                      </div>
+                      <button className="action-button danger-button" onClick={() => onAction({ action: "declare-bankrupt" })}>
+                        Declare bankruptcy
+                      </button>
+                    </>
+                  ) : game.phase === "debt" ? (
+                    <div className="action-message">{debtPlayer?.name} needs to raise cash to pay a debt.</div>
+                  ) : game.phase === "auction" && game.auction ? (
+                    game.auction.turnPlayerId === playerId ? (
+                      <>
+                        <div className="action-message">
+                          <strong>{propertyName(game, game.auction.propertyId)} auction</strong>
+                          <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : `No bids yet — opening bid ${formatMoney(game.auction.minimumBid)}.`}</span>
+                        </div>
+                        <label className="auction-label" htmlFor="auction-bid">Your bid (₹)</label>
+                        <input
+                          id="auction-bid"
+                          min={Math.max(game.auction.highestBid + 1, game.auction.minimumBid)}
+                          onChange={(event) => setAuctionBid(event.target.value)}
+                          type="number"
+                          value={auctionBid}
+                        />
+                        <button
+                          className="action-button"
+                          disabled={!Number.isSafeInteger(Number(auctionBid)) || Number(auctionBid) < Math.max(game.auction.highestBid + 1, game.auction.minimumBid) || Number(auctionBid) > (me?.cash ?? 0)}
+                          onClick={() => onAction({ action: "auction-bid", amount: Number(auctionBid) })}
+                        >
+                          Bid {formatMoney(Number(auctionBid) || 0)}
+                        </button>
+                        <button className="action-button secondary-action" onClick={() => onAction({ action: "auction-pass" })}>Pass on auction</button>
+                      </>
+                    ) : (
+                      <div className="action-message">
+                        <strong>{game.players.find((player) => player.id === game.auction?.turnPlayerId)?.name} is bidding</strong>
+                        <span>{game.auction.highestBidderId ? `High bid: ${formatMoney(game.auction.highestBid)}` : `Opening at ${formatMoney(game.auction.minimumBid)}.`}</span>
+                      </div>
+                    )
+                  ) : !isMyTurn ? (
+                    <div className="action-message">Sit back, sip chai, and watch the move unfold.</div>
+                  ) : game.phase === "buying" && pendingProperty ? (
+                    <>
+                      <div className="action-message">
+                        <strong>{pendingProperty.name}</strong>
+                        <span>Available for {formatMoney(pendingProperty.price)} · Rent starts at {formatMoney(pendingProperty.rent[0])}</span>
+                      </div>
+                      <button className="action-button" disabled={(me?.cash ?? 0) < pendingProperty.price} onClick={() => onAction({ action: "buy" })}>
+                        Buy for {formatMoney(pendingProperty.price)}
+                      </button>
+                      {game.rules.auctionsEnabled && <button className="action-button secondary-action" onClick={() => onAction({ action: "auction" })}>Start auction</button>}
+                      <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Decline</button>
+                    </>
+                  ) : rollAvailable && me?.inJail ? (
+                    <>
+                      <div className="action-message"><strong>You're in Jail</strong><span>Roll doubles to get out, or pay ₹50.</span></div>
+                      <button className="action-button" onClick={() => onAction({ action: "jail-roll" })}>🎲 Roll for doubles</button>
+                      <button className="action-button secondary-action" disabled={me.cash < 50} onClick={() => onAction({ action: "jail-pay" })}>Pay ₹50 & roll</button>
+                    </>
+                  ) : rollAvailable ? (
+                    <>
+                      <div className="action-message">
+                        <strong>{game.canRollAgain ? "Doubles! Roll again." : "Ready to roll?"}</strong>
+                        <span>{game.canRollAgain ? "Lucky you — take another turn." : "Roll the dice and see where Mumbai takes you."}</span>
+                      </div>
+                      <button className="action-button roll-button" onClick={() => onAction({ action: "roll" })}>🎲 Roll the dice</button>
+                    </>
+                  ) : mayEndTurn ? (
+                    <>
+                      <div className="action-message"><strong>Move complete</strong><span>{game.canRollAgain ? "Roll doubles to keep your turn." : "Pass the dice to the next player."}</span></div>
+                      <button className="action-button" onClick={() => onAction({ action: "end-turn" })}>End turn →</button>
+                    </>
+                  ) : (
+                    <div className="action-message">Finish resolving your move.</div>
+                  )}
+                  {me?.inJail && !isMyTurn && <p className="jail-note">You're in Jail until your next turn.</p>}
+                </section>
               </div>
               {game.board.map((space, index) => {
                 const property = getPropertyForSpace(game, space.propertyId);
@@ -1236,91 +1281,6 @@ function GameTable({
         </section>
 
         <aside className="game-sidebar">
-          <section className={`action-panel ${game.phase === "buying" && pendingProperty ? "property-purchase-actions" : ""}`}>
-            <p className="panel-kicker">YOUR MOVE</p>
-            {game.phase === "finished" ? (
-              <div className="action-message">{game.endReason === "time-limit" ? "Time is up! The champion is ranked by cash, then properties." : "The game is over. Thanks for playing!"}</div>
-            ) : owedByMe ? (
-              <>
-                <div className="action-message debt-message">
-                  <strong>{formatMoney(game.debt?.amount ?? 0)} due</strong>
-                  <span>{game.debt?.reason}. Mortgage properties or sell buildings to raise cash.</span>
-                </div>
-                <button className="action-button danger-button" onClick={() => onAction({ action: "declare-bankrupt" })}>
-                  Declare bankruptcy
-                </button>
-              </>
-            ) : game.phase === "debt" ? (
-              <div className="action-message">{debtPlayer?.name} needs to raise cash to pay a debt.</div>
-            ) : game.phase === "auction" && game.auction ? (
-              game.auction.turnPlayerId === playerId ? (
-                <>
-                  <div className="action-message">
-                    <strong>{propertyName(game, game.auction.propertyId)} auction</strong>
-                    <span>{game.auction.highestBidderId ? `Current bid: ${formatMoney(game.auction.highestBid)}` : `No bids yet — opening bid ${formatMoney(game.auction.minimumBid)}.`}</span>
-                  </div>
-                  <label className="auction-label" htmlFor="auction-bid">Your bid (₹)</label>
-                  <input
-                    id="auction-bid"
-                    min={Math.max(game.auction.highestBid + 1, game.auction.minimumBid)}
-                    onChange={(event) => setAuctionBid(event.target.value)}
-                    type="number"
-                    value={auctionBid}
-                  />
-                  <button
-                    className="action-button"
-                    disabled={!Number.isSafeInteger(Number(auctionBid)) || Number(auctionBid) < Math.max(game.auction.highestBid + 1, game.auction.minimumBid) || Number(auctionBid) > (me?.cash ?? 0)}
-                    onClick={() => onAction({ action: "auction-bid", amount: Number(auctionBid) })}
-                  >
-                    Bid {formatMoney(Number(auctionBid) || 0)}
-                  </button>
-                  <button className="action-button secondary-action" onClick={() => onAction({ action: "auction-pass" })}>Pass on auction</button>
-                </>
-              ) : (
-                <div className="action-message">
-                  <strong>{game.players.find((player) => player.id === game.auction?.turnPlayerId)?.name} is bidding</strong>
-                  <span>{game.auction.highestBidderId ? `High bid: ${formatMoney(game.auction.highestBid)}` : `Opening at ${formatMoney(game.auction.minimumBid)}.`}</span>
-                </div>
-              )
-            ) : !isMyTurn ? (
-              <div className="action-message">Sit back, sip chai, and watch the move unfold.</div>
-            ) : game.phase === "buying" && pendingProperty ? (
-              <>
-                <div className="action-message">
-                  <strong>{pendingProperty.name}</strong>
-                  <span>Available for {formatMoney(pendingProperty.price)} · Rent starts at {formatMoney(pendingProperty.rent[0])}</span>
-                </div>
-                <button className="action-button" disabled={(me?.cash ?? 0) < pendingProperty.price} onClick={() => onAction({ action: "buy" })}>
-                  Buy for {formatMoney(pendingProperty.price)}
-                </button>
-                {game.rules.auctionsEnabled && <button className="action-button secondary-action" onClick={() => onAction({ action: "auction" })}>Start auction</button>}
-                <button className="action-button secondary-action" onClick={() => onAction({ action: "pass" })}>Decline</button>
-              </>
-            ) : rollAvailable && me?.inJail ? (
-              <>
-                <div className="action-message"><strong>You're in Jail</strong><span>Roll doubles to get out, or pay ₹50.</span></div>
-                <button className="action-button" onClick={() => onAction({ action: "jail-roll" })}>🎲 Roll for doubles</button>
-                <button className="action-button secondary-action" disabled={me.cash < 50} onClick={() => onAction({ action: "jail-pay" })}>Pay ₹50 & roll</button>
-              </>
-            ) : rollAvailable ? (
-              <>
-                <div className="action-message">
-                  <strong>{game.canRollAgain ? "Doubles! Roll again." : "Ready to roll?"}</strong>
-                  <span>{game.canRollAgain ? "Lucky you — take another turn." : "Roll the dice and see where Mumbai takes you."}</span>
-                </div>
-                <button className="action-button roll-button" onClick={() => onAction({ action: "roll" })}>🎲 Roll the dice</button>
-              </>
-            ) : mayEndTurn ? (
-              <>
-                <div className="action-message"><strong>Move complete</strong><span>{game.canRollAgain ? "Roll doubles to keep your turn." : "Pass the dice to the next player."}</span></div>
-                <button className="action-button" onClick={() => onAction({ action: "end-turn" })}>End turn →</button>
-              </>
-            ) : (
-              <div className="action-message">Finish resolving your move.</div>
-            )}
-            {me?.inJail && !isMyTurn && <p className="jail-note">You're in Jail until your next turn.</p>}
-          </section>
-
           <div className="game-tools-drawer">
           <section className="players-panel">
             <div className="panel-heading"><h3>Players & cash</h3><span>{game.players.filter((player) => !player.bankrupt).length} in play</span></div>

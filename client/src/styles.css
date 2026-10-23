@@ -500,7 +500,7 @@ footer b { color: #c8793b; }
   .turn-banner { display: none; }
   .season-event { width: min(520px, calc(100vw - 32px)); flex: 0 0 auto; margin: 3px auto 6px; padding: 7px 10px; font-size: 9px; }
   .board-tools { display: none; }
-  .board-wrap { width: min(94vw, calc(100dvh - 360px), 940px); max-width: 100%; margin: 0 auto; padding: 8px; }
+  .board-wrap { width: min(97vw, calc(100dvh - 76px), 1320px); max-width: 100%; margin: 0 auto; padding: 8px; }
   .player-strip { display: none; }
   .board-center { padding: 10px; }
   .board-ornament { margin-bottom: 5px; font-size: clamp(12px, 1.35vw, 18px); }
@@ -520,11 +520,6 @@ footer b { color: #c8793b; }
   .game-tools-drawer { position: fixed; top: 68px; right: 12px; bottom: 12px; z-index: 18; display: grid; width: min(360px, calc(100vw - 24px)); align-content: start; gap: 10px; overflow-x: hidden; overflow-y: auto; padding: 10px; border: 1px solid rgba(58, 67, 52, .16); border-radius: 12px; background: rgba(249, 246, 237, .97); box-shadow: 0 16px 55px rgba(27, 34, 26, .24); transition: right .24s ease, visibility .24s ease; }
   .tools-collapsed .game-tools-drawer { right: -390px; visibility: hidden; pointer-events: none; }
   .tools-open .game-tools-drawer { right: 12px; visibility: visible; pointer-events: auto; }
-  .game-sidebar .action-panel { position: fixed; bottom: 12px; left: 50%; z-index: 16; width: min(430px, calc(100vw - 24px)); max-height: 24dvh; overflow-y: auto; padding: 11px 14px; border: 1px solid rgba(255,255,255,.75); background: rgba(255,253,247,.97); box-shadow: 0 8px 30px rgba(27,34,26,.25); transform: translateX(-50%); }
-  .action-panel .panel-kicker { margin-bottom: 5px; }
-  .action-panel .action-message { gap: 3px; margin-bottom: 7px; font-size: 10px; }
-  .action-panel .action-message strong { font-size: 14px; }
-  .action-panel .action-button { min-height: 34px; padding: 7px 10px; }
 }
 
 @keyframes own-piece-glow {
@@ -600,15 +595,13 @@ footer b { color: #c8793b; }
 .theme-dark .log-entry { border-color: #3b4541; }
 
 @media (max-width: 760px) {
-  .table-page { height: auto; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; padding: 0 3.5% calc(156px + env(safe-area-inset-bottom)); }
+  .table-page { height: auto; min-height: 100dvh; overflow-x: hidden; overflow-y: auto; padding: 0 3.5% max(25px, env(safe-area-inset-bottom)); }
   .table-topbar { height: auto; min-height: 70px; flex: 0 0 auto; }
   .tools-toggle { display: none !important; }
   .game-sidebar { position: static; top: auto; right: auto; bottom: auto; display: grid; width: 100%; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
   .game-tools-drawer { position: static; top: auto; right: auto; bottom: auto; width: 100%; max-height: none; overflow: visible; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; transform: none; }
   .tools-collapsed .game-tools-drawer, .tools-open .game-tools-drawer { right: auto; visibility: visible; pointer-events: auto; }
-  .game-sidebar .action-panel { position: fixed; right: 0; bottom: 0; left: 0; z-index: 16; width: 100%; max-height: min(40dvh, 300px); overflow: auto; padding: 12px 5% max(12px, env(safe-area-inset-bottom)); border: 1px solid rgba(58, 67, 52, .18); border-radius: 12px 12px 0 0; background: rgba(255,253,247,.98); box-shadow: 0 -8px 30px rgba(27,34,26,.2); transform: none; }
   .player-strip { display: grid; }
-  .theme-dark .game-sidebar .action-panel { border-color: #3c4744; background: rgba(34,43,43,.98); }
   .theme-dark .mobile-game-nav { border-color: #41494a; background: rgba(32, 41, 41, .97); }
   .theme-dark .mobile-game-nav button { color: #c1c8bf; }
   .theme-dark .mobile-game-nav button.selected-mobile-view { background: #35463b; color: #ecf2e8; }
@@ -616,8 +609,8 @@ footer b { color: #c8793b; }
 
 .board-center {
   position: relative;
-  gap: clamp(8px, 1.4vw, 18px);
-  padding: clamp(14px, 3vw, 36px);
+  gap: clamp(5px, .8vw, 10px);
+  padding: clamp(8px, 1.5vw, 22px);
   isolation: isolate;
 }
 .board-center::before {
@@ -680,7 +673,26 @@ footer b { color: #c8793b; }
 .center-dice.is-rolling .die-face { animation: center-dice-roll .9s cubic-bezier(.22,.8,.25,1) both; }
 .center-dice.is-rolling .die-face + b + .die-face { animation-delay: .08s; }
 .center-caption { margin: 0; color: #66786c; font-size: clamp(8px, .75vw, 10px); font-weight: 800; letter-spacing: .13em; }
-.board-wrap { width: min(97vw, calc(100dvh - 250px), 1100px); }
+.board-center .action-panel {
+  width: min(100%, 440px);
+  padding: clamp(8px, 1.2vw, 14px);
+  border-color: rgba(37, 87, 68, .24);
+  background: rgba(255, 253, 247, .94);
+  box-shadow: 0 8px 26px rgba(27, 34, 26, .16);
+}
+.board-center .action-panel .panel-kicker { margin: 0 0 5px; }
+.board-center .action-panel .action-message { gap: 3px; margin-bottom: 7px; font-size: clamp(9px, .8vw, 11px); }
+.board-center .action-panel .action-message strong { font-size: clamp(13px, 1.1vw, 16px); }
+.board-center .action-panel .action-button { min-height: 36px; padding: 7px 10px; font-size: clamp(9px, .8vw, 11px); }
+.board-center .action-panel.property-purchase-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.property-purchase-actions > .panel-kicker,
+.property-purchase-actions > .action-message { grid-column: 1 / -1; }
+.property-purchase-actions .panel-kicker { margin-bottom: 0; }
+.property-purchase-actions .action-message { gap: 2px; margin: 0; }
+.property-purchase-actions .secondary-action { margin-top: 0; }
+.theme-dark .board-center .action-panel { border-color: #3c4744; background: rgba(34, 43, 43, .96); }
+.theme-dark .board-center .action-panel .action-message strong { color: #e2e9dc; }
+.board-wrap { width: min(97vw, calc(100dvh - 76px), 1320px); }
 .board-grid { background: #e7f3e9; }
 .space-label { font-size: clamp(7px, .92vw, 12px); line-height: 1.12; -webkit-line-clamp: 4; }
 .color-brown { background: #9b5a3c; }.color-lightBlue { background: #35b9d0; }.color-pink { background: #e8428a; }.color-orange { background: #ff8838; }.color-red { background: #ef4138; }.color-yellow { background: #f0c928; }.color-green { background: #1ca469; }.color-darkBlue { background: #345ccb; }.color-railroad { background: #293c4f; }.color-utility { background: #e2a522; }
@@ -739,12 +751,7 @@ footer b { color: #c8793b; }
   .board-subtitle { font-size: clamp(8px, 2.2vw, 11px); }
   .die-face { width: clamp(30px, 9vw, 42px); }
   .preferences-card { width: min(480px, 100%); }
-  .game-sidebar .action-panel.property-purchase-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-  .property-purchase-actions > .panel-kicker,
-  .property-purchase-actions > .action-message { grid-column: 1 / -1; }
-  .property-purchase-actions .panel-kicker { margin-bottom: 0; }
-  .property-purchase-actions .action-message { gap: 2px; margin: 0; font-size: 9px; }
-  .property-purchase-actions .action-message strong { font-size: 14px; }
-  .property-purchase-actions .action-button { min-height: 38px; padding: 6px 3px; font-size: clamp(9px, 2.7vw, 11px); }
-  .property-purchase-actions .secondary-action { margin-top: 0; }
+  .board-center { gap: 5px; padding: 7px; }
+  .board-center .action-panel { width: min(100%, 440px); padding: 8px; }
+  .board-center .action-panel .action-button { min-height: 36px; padding: 6px 3px; font-size: clamp(9px, 2.7vw, 11px); }
 }
