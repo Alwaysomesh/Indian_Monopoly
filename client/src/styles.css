@@ -467,6 +467,7 @@ footer b { color: #c8793b; }
 .rematch-button { margin-top: 7px; }
 .motion-disabled *, .motion-disabled *::before, .motion-disabled *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation: none !important; }
 .motion-disabled .milestone-celebration { opacity: 1; transform: translateX(-50%); }
+.screen-reader-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; clip-path: inset(50%); }
 
 @media (max-width: 760px) {
   .table-title { flex-wrap: wrap; }

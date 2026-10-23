@@ -973,6 +973,7 @@ function GameTable({
       </header>
 
       {celebration && <div className="milestone-celebration" role="status" aria-live="polite"><span>{celebration}</span></div>}
+      <div aria-atomic="true" aria-live="polite" className="screen-reader-only">{game.log[0]?.text ?? ""}</div>
       {showHelp && (
         <div className="card-backdrop" onClick={() => setShowHelp(false)}>
           <section aria-labelledby="help-heading" aria-modal="true" className="help-card" onClick={(event) => event.stopPropagation()} role="dialog">
@@ -1188,9 +1189,18 @@ function GameTable({
                     key={space.id}
                     ref={(element) => { boardSpaceRefs.current[index] = element; }}
                     onClick={property ? () => setSelectedPropertyId(property.id) : undefined}
-                    onKeyDown={property ? (event) => { if (event.key === "Enter" || event.key === " ") setSelectedPropertyId(property.id); } : undefined}
+                    onKeyDown={property ? (event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedPropertyId(property.id);
+                      }
+                    } : undefined}
                     role={property ? "button" : undefined}
                     tabIndex={property ? 0 : undefined}
+                    aria-haspopup={property ? "dialog" : undefined}
+                    aria-label={property
+                      ? `${property.name}. ${owner ? `Owned by ${owner.name}.` : "Unowned."} Purchase price ${formatMoney(property.price)}. Base rent ${formatMoney(property.rent[0])}.${property.mortgaged ? " Mortgaged; rent is not collected." : ""}`
+                      : undefined}
                     style={{ gridColumn: position.gridColumn, gridRow: position.gridRow }}
                     title={property ? `${property.name} · ${formatMoney(property.price)} · Rent ${formatMoney(property.rent[0])}` : space.label}
                   >
