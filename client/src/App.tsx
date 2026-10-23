@@ -1438,7 +1438,7 @@ function GameTable({
             )}
             {tab === "trade" && (
               <div className="trade-panel">
-                <button className="action-button compact-action" disabled={game.phase === "finished" || game.players.filter((player) => player.id !== playerId && !player.bankrupt).length === 0} onClick={() => { setTradeError(""); setShowTradeDialog(true); }}>Propose a trade</button>
+                <button className="action-button compact-action" disabled={game.phase === "finished" || game.players.filter((player) => player.id !== playerId && !player.bankrupt).length === 0} onClick={() => openTradeComposer()}>Propose a trade</button>
                 <div className="trade-offers">
                   <strong>Trade offers</strong>
                   {game.trades.slice(0, 10).map((trade) => {
